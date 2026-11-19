@@ -1,219 +1,453 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8" />
-  <title>KGNN Drug Interaction Predictor</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BioKG Research Demo</title>
   <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      max-width: 720px;
-      margin: 40px auto;
-      padding: 0 20px;
-      color: #222;
-      background-color: #fafafa;
+    * {
+      box-sizing: border-box;
     }
-    h2, h3 {
-      text-align: center;
+
+    body {
+      margin: 0;
+      background: #f5f7fa;
+      color: #183044;
+      font: 16px/1.6 system-ui, sans-serif;
+    }
+
+    main {
+      max-width: 940px;
+      margin: 40px auto;
+      padding: 0 20px 40px;
+    }
+
+    nav {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-bottom: 32px;
+    }
+
+    a {
+      color: #006b78;
+    }
+
+    h1,
+    h2,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      line-height: 1.2;
+    }
+
+    .eyebrow {
+      color: #006b78;
+      font-weight: 700;
+      letter-spacing: .1em;
+      font-size: .8rem;
+    }
+
+    .card,
+    .notice {
+      background: white;
+      border: 1px solid #d5dfe6;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 24px 0;
+    }
+
+    .notice {
+      background: #fff8e9;
+      border-color: #dfc88e;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    input,
+    select,
+    button {
+      font: inherit;
+      border-radius: 6px;
+      padding: 10px 12px;
+    }
+
+    input,
+    select {
+      width: 100%;
+      border: 1px solid #9aadb9;
+      background: white;
+      color: inherit;
+    }
+
+    .field {
       margin-bottom: 20px;
     }
-    form {
-      background: #fff;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-      margin-bottom: 30px;
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
     }
-    input, select {
-      padding: 10px;
-      width: 100%;
-      margin: 10px 0;
-      border-radius: 5px;
-      border: 1px solid #ccc;
-      font-size: 1rem;
-    }
+
     button {
-      padding: 10px 20px;
-      margin-right: 10px;
-      font-size: 1rem;
-      border: none;
-      border-radius: 5px;
       cursor: pointer;
+      background: #006b78;
+      color: white;
+      border: 1px solid #006b78;
     }
-    button[type="submit"] {
-      background-color: #007bff;
-      color: #fff;
+
+    button.secondary {
+      background: white;
+      color: #006b78;
     }
-    button[type="button"] {
-      background-color: #6c757d;
-      color: #fff;
+
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
     }
-    .result-box {
-      border: 1px solid #ccc;
-      background: #fff;
-      border-radius: 8px;
-      padding: 20px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+
+    :focus-visible {
+      outline: 3px solid #d39a28;
+      outline-offset: 3px;
     }
-    .result-box p {
-      margin: 8px 0;
+
+    .muted {
+      color: #526675;
     }
-    .status-high { color: red; }
-    .status-mid { color: orange; }
-    .status-low { color: green; }
-    .link-group {
-      margin-top: 20px;
-      padding-left: 10px;
+
+    .error {
+      color: #932626;
     }
-    .link-group a {
-      display: block;
-      margin-bottom: 8px;
-      color: #007bff;
-      text-decoration: none;
+
+    .score {
+      font-size: 1.7rem;
+      font-weight: 700;
     }
-    .link-group a:hover {
-      text-decoration: underline;
+
+    .metadata {
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 600px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .card,
+      .notice {
+        padding: 18px;
+      }
     }
   </style>
+</head>
+
+<body data-model-ready="{{ 'true' if not prediction_error else 'false' }}">
+  <main>
+    <nav aria-label="Main navigation">
+      <a href="/" aria-current="page">Research demo</a>
+      <a href="/batch">Batch prediction</a>
+    </nav>
+
+    <p class="eyebrow">BIOMEDICAL KNOWLEDGE GRAPH RESEARCH</p>
+    <h1>BioKG Research Demo</h1>
+    <p>
+      Explore recorded biomedical relationships and experimental link prediction.
+      This demo does not establish drug safety or provide clinical advice.
+    </p>
+
+    {% if prediction_error %}
+    <section class="notice" role="status">
+      <strong>Predictions unavailable</strong>
+      <p>
+        A compatible trained and evaluated checkpoint is required.
+        Recorded graph relationships remain available.
+      </p>
+    </section>
+    {% endif %}
+
+    {% if error %}
+    <p class="error" role="alert">{{ error }}</p>
+    {% endif %}
+
+    <section class="card">
+      <h2>Select two drugs</h2>
+      <p class="muted">
+        Use local BioKG drug indices, not DrugBank IDs or PubChem CIDs.
+        {% if drug_count %}
+        Valid range: 0–{{ drug_count - 1 }}.
+        {% endif %}
+      </p>
+
+      <form action="/predict" method="POST" id="prediction-form">
+        <div class="grid">
+          <div class="field">
+            <label for="first">Drug 1 local index</label>
+            <input id="first" name="drug1_id" type="number" min="0" step="1" {% if drug_count
+              %}max="{{ drug_count - 1 }}" {% endif %} required>
+          </div>
+
+          <div class="field">
+            <label for="second">Drug 2 local index</label>
+            <input id="second" name="drug2_id" type="number" min="0" step="1" {% if drug_count
+              %}max="{{ drug_count - 1 }}" {% endif %} required>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="relation_type">Recorded drug-drug relation ID</label>
+          <select id="relation_type" name="relation_type" required disabled>
+            <option value="">Loading relation IDs…</option>
+          </select>
+
+          <p id="relation-status" class="muted" role="status">
+            Relation selection is used for prediction.
+            Graph exploration does not require it.
+          </p>
+        </div>
+
+        <div class="actions">
+          <button type="submit" id="predict-button" disabled>
+            Predict
+          </button>
+
+          <button type="button" id="graph-button">
+            View recorded relationships
+          </button>
+
+          <button type="button" id="sample-button" class="secondary">
+            Fill example indices
+          </button>
+        </div>
+
+        <p id="form-status" class="error" role="alert"></p>
+      </form>
+    </section>
+
+    {% if prediction_result %}
+    <section class="card">
+      <h2>Research result</h2>
+
+      <p>
+        {{ prediction_result.drug1_name }}
+        ({{ prediction_result.drug1_id }})
+        /
+        {{ prediction_result.drug2_name }}
+        ({{ prediction_result.drug2_id }})
+      </p>
+
+      <p>
+        Recorded relation ID:
+        {{ prediction_result.relation_type }}
+      </p>
+
+      <p>Uncalibrated model score</p>
+      <p class="score">
+        {{ prediction_result.uncalibrated_model_score | round(4) }}
+      </p>
+
+      <p>
+        This score is not a clinical probability.
+        No harm or safety threshold has been established.
+      </p>
+
+      <p>
+        <a href="/graph?drug1_id={{ prediction_result.drug1_id }}&amp;drug2_id={{ prediction_result.drug2_id }}">
+          View recorded relationships
+        </a>
+        ·
+        <a href="/download_log">Download prediction log</a>
+      </p>
+
+      {% for number in [1, 2] %}
+      {% set info = prediction_result.get('drug' ~ number ~ '_full_info') or prediction_result.get('drug' ~ number ~
+      '_info') %}
+      {% if info %}
+      <div class="metadata">
+        <h3>Drug {{ number }} — optional DrugBank metadata</h3>
+
+        {% if info.get('drugbank_id') %}
+        <p>
+          DrugBank ID:
+          <a href="https://go.drugbank.com/drugs/{{ info.drugbank_id }}" target="_blank" rel="noopener noreferrer">
+            {{ info.drugbank_id }}
+          </a>
+        </p>
+        {% endif %}
+
+        {% if info.get('cas') %}
+        <p>CAS: {{ info.cas }}</p>
+        {% endif %}
+
+        {% if info.get('type') %}
+        <p>Type: {{ info.type }}</p>
+        {% endif %}
+
+        {% if info.get('description') %}
+        <p>{{ info.description[:200] }}</p>
+        {% endif %}
+
+        {% if info.get('targets') %}
+        <p>Recorded targets:</p>
+        <ul>
+          {% for target in info.targets[:3] %}
+          <li>{{ target }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    <p class="muted">
+      Graph edges describe recorded source relationships.
+      They are not model explanations or evidence of clinical harm.
+    </p>
+  </main>
 
   <script>
-    async function loadRelations() {
-      const res = await fetch('/relations');
-      const data = await res.json();
-      const select = document.getElementById('relation_type');
+    const first = document.getElementById('first');
+    const second = document.getElementById('second');
+    const relationSelect = document.getElementById('relation_type');
+    const predictButton = document.getElementById('predict-button');
+    const modelReady = document.body.dataset.modelReady === 'true';
 
-      select.innerHTML = '';
-      const defaultOpt = document.createElement('option');
-      defaultOpt.disabled = true;
-      defaultOpt.selected = true;
-      defaultOpt.textContent = 'Select Relation Type';
-      select.appendChild(defaultOpt);
+    function validPair() {
+      for (const input of [first, second]) {
+        input.setCustomValidity('');
 
-      data.forEach(rel => {
-        const opt = document.createElement('option');
-        opt.value = rel;
-        opt.textContent = rel;
-        select.appendChild(opt);
+        if (
+          !/^\d+$/.test(input.value) ||
+          !Number.isSafeInteger(Number(input.value))
+        ) {
+          input.setCustomValidity(
+            'Enter a nonnegative integer local drug index.'
+          );
+        }
+
+        if (!input.reportValidity()) return false;
+      }
+
+      if (Number(first.value) === Number(second.value)) {
+        second.setCustomValidity('Choose two distinct drugs.');
+        second.reportValidity();
+        return false;
+      }
+
+      return true;
+    }
+
+    for (const input of [first, second]) {
+      input.addEventListener('input', () => {
+        first.setCustomValidity('');
+        second.setCustomValidity('');
       });
     }
-    window.onload = loadRelations;
 
-    function setSample() {
-      document.querySelector('input[name="drug1_id"]').value = 58;
-      document.querySelector('input[name="drug2_id"]').value = 89;
-      document.querySelector('#relation_type').value = "drug-drug_cancer";
+    document.getElementById('graph-button').addEventListener(
+      'click',
+      () => {
+        if (!validPair()) return;
+
+        location.href = '/graph?' + new URLSearchParams({
+          drug1_id: first.value,
+          drug2_id: second.value
+        });
+      }
+    );
+
+    document.getElementById('sample-button').addEventListener(
+      'click',
+      () => {
+        const max = first.max ? Number(first.max) : Infinity;
+        first.value = max >= 89 ? '58' : '0';
+        second.value = max >= 89 ? '89' : '1';
+
+        first.setCustomValidity('');
+        second.setCustomValidity('');
+
+        if (
+          [...relationSelect.options].some(
+            option => option.value === '2'
+          )
+        ) {
+          relationSelect.value = '2';
+        }
+      }
+    );
+
+    document.getElementById('prediction-form').addEventListener(
+      'submit',
+      event => {
+        if (!validPair() || !modelReady || relationSelect.disabled) {
+          event.preventDefault();
+
+          document.getElementById('form-status').textContent =
+            modelReady
+              ? 'Check the indices and select an available relation.'
+              : 'Predictions are unavailable. You can still explore recorded relationships.';
+        }
+      }
+    );
+
+    async function loadRelations() {
+      const status = document.getElementById('relation-status');
+
+      try {
+        const response = await fetch('/relations');
+        if (!response.ok) throw new Error('Relation request failed');
+
+        const relations = await response.json();
+
+        if (!Array.isArray(relations) || !relations.length) {
+          throw new Error('No relations returned');
+        }
+
+        relationSelect.replaceChildren(
+          new Option('Select a relation ID', '')
+        );
+
+        relations
+          .map(String)
+          .sort((a, b) =>
+            a.localeCompare(b, undefined, { numeric: true })
+          )
+          .forEach(relation => {
+            relationSelect.add(new Option(relation, relation));
+          });
+
+        relationSelect.disabled = false;
+        predictButton.disabled = !modelReady;
+
+        status.textContent =
+          'These numeric IDs come from BioKG. Selecting a relation does not establish an interaction.';
+      } catch {
+        relationSelect.replaceChildren(
+          new Option('Relation IDs unavailable', '')
+        );
+
+        status.textContent =
+          'Relation IDs could not be loaded. Recorded graph exploration remains available.';
+      }
     }
+
+    loadRelations();
   </script>
-</head>
-<body>
-
-  <h2>Drug-Drug Interaction Prediction</h2>
-
-  <form method="POST" action="/predict">
-    <label>Drug 1 ID:</label>
-    <input type="number" name="drug1_id" required />
-
-    <label>Drug 2 ID:</label>
-    <input type="number" name="drug2_id" required />
-
-    <label>Relation Type:</label>
-    <select name="relation_type" id="relation_type" required>
-      <option value="" disabled selected>Loading...</option>
-    </select>
-
-    <button type="submit">Predict</button>
-    <button type="button" onclick="setSample()">Try Sample</button>
-  </form>
-
-  {% if error %}
-  <div style="color: red; padding: 10px; border: 1px solid red; background: #ffecec; border-radius: 6px;">
-    ⚠️ {{ error }}
-  </div>
-  {% endif %}
-
-  {% if prediction_result %}
-  <div class="result-box">
-    <h3>Prediction Result:</h3>
-    <p>
-      <strong>{{ prediction_result.drug1_name }}</strong> (ID: {{ prediction_result.drug1_id }})
-      ↔ <strong>{{ prediction_result.drug2_name }}</strong> (ID: {{ prediction_result.drug2_id }})
-    </p>
-    <p>Relation type: <strong>{{ prediction_result.relation }}</strong></p>
-    <p>Predicted interaction probability: <strong>{{ prediction_result.prediction | round(4) }}</strong></p>
-
-    {% if prediction_result.prediction >= 0.8 %}
-      <p class="status-high">⚠️ High likelihood — potentially significant.</p>
-    {% elif prediction_result.prediction >= 0.5 %}
-      <p class="status-mid">⚠️ Moderate likelihood — consider context.</p>
-    {% else %}
-      <p class="status-low">✅ Low likelihood — likely weak or no interaction.</p>
-    {% endif %}
-  </div>
-  {% endif %}
-
-  <div class="link-group">
-    <a href="/batch">Batch Prediction Upload</a>
-    {% if prediction_result %}
-      <a href="/download_log">Download All Predictions</a>
-      <a href="/graph?drug1_id={{ prediction_result.drug1_id }}&drug2_id={{ prediction_result.drug2_id }}" target="_blank">View Full Graph Explanation</a>
-    {% endif %}
-
-    {% if prediction_result %}
-    <div class="mt-4 p-4 border rounded bg-gray-50">
-      <h4 class="text-lg font-semibold mb-2">Drug Info</h4>
-      <ul class="list-disc ml-5 space-y-3">
-        <li>
-          <strong>{{ prediction_result.drug1_name }}</strong><br>
-    
-          {% if prediction_result.drug1_full_info %}
-            <span>CAS: {{ prediction_result.drug1_full_info.cas }}</span><br>
-            <span>Type: {{ prediction_result.drug1_full_info.type }}</span><br>
-            <span>Description: {{ prediction_result.drug1_full_info.description[:200] }}...</span><br>
-            <span>DrugBank ID: 
-              <a href="https://go.drugbank.com/drugs/{{ prediction_result.drug1_full_info.drugbank_id }}" target="_blank" class="text-blue-600 underline">
-                {{ prediction_result.drug1_full_info.drugbank_id }}
-              </a>
-            </span><br>
-            <span>Top Targets:</span>
-            <ul class="ml-5 list-disc">
-              {% for target in prediction_result.drug1_full_info.targets[:3] %}
-                <li>{{ target }}</li>
-              {% endfor %}
-            </ul>
-          {% else %}
-            <span class="text-gray-500 italic">No DrugBank info found for {{ prediction_result.drug1_name }}.</span>
-          {% endif %}
-        </li>
-    
-        <li class="mt-4">
-          <strong>{{ prediction_result.drug2_name }}</strong><br>
-    
-          {% if prediction_result.drug2_full_info %}
-            <span>CAS: {{ prediction_result.drug2_full_info.cas }}</span><br>
-            <span>Type: {{ prediction_result.drug2_full_info.type }}</span><br>
-            <span>Description: {{ prediction_result.drug2_full_info.description[:200] }}...</span><br>
-            <span>DrugBank ID: 
-              <a href="https://go.drugbank.com/drugs/{{ prediction_result.drug2_full_info.drugbank_id }}" target="_blank" class="text-blue-600 underline">
-                {{ prediction_result.drug2_full_info.drugbank_id }}
-              </a>
-            </span><br>
-            <span>Top Targets:</span>
-            <ul class="ml-5 list-disc">
-              {% for target in prediction_result.drug2_full_info.targets[:3] %}
-                <li>{{ target }}</li>
-              {% endfor %}
-            </ul>
-          {% else %}
-            <span class="text-gray-500 italic">No DrugBank info found for {{ prediction_result.drug2_name }}.</span>
-          {% endif %}
-        </li>
-      </ul>
-    </div>
-    
-    
-{% endif %}
-
-  </div>
-
 </body>
+
 </html>

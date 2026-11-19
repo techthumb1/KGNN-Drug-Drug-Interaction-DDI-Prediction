@@ -3,9 +3,9 @@ flask
 torch
 torch-geometric
 ogb
-pandas
-numpy
 scikit-learn
 python-dotenv
 gdown
 requests
+numpy==1.26.4
+pandas==2.2.3

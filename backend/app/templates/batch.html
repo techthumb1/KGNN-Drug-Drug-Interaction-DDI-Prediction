@@ -1,120 +1,251 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8" />
-  <title>Batch Prediction Upload</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Batch Prediction | BioKG Research Demo</title>
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      font-family: 'Inter', sans-serif;
-      max-width: 720px;
+      margin: 0;
+      background: #f5f7fa;
+      color: #183044;
+      font: 16px/1.6 system-ui, sans-serif;
+    }
+
+    main {
+      max-width: 820px;
       margin: 40px auto;
-      padding: 0 20px;
-      background-color: #f9f9f9;
-      color: #222;
+      padding: 0 20px 40px;
     }
-    h2 {
-      text-align: center;
-      margin-bottom: 20px;
+
+    nav {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+      margin-bottom: 32px;
     }
-    form {
-      background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-      margin-bottom: 30px;
+
+    a {
+      color: #006b78;
     }
-    input[type="file"] {
-      padding: 10px;
-      margin: 10px 0;
+
+    h1,
+    h2,
+    p {
+      margin-top: 0;
+    }
+
+    .card,
+    .notice {
+      background: white;
+      border: 1px solid #d5dfe6;
+      border-radius: 12px;
+      padding: 24px;
+      margin: 24px 0;
+    }
+
+    .notice {
+      background: #fff8e9;
+      border-color: #dfc88e;
+    }
+
+    label {
       display: block;
-      width: 100%;
-    }
-    button {
-      padding: 10px 20px;
-      font-size: 1rem;
-      border: none;
-      border-radius: 6px;
-      background-color: #007bff;
-      color: white;
-      cursor: pointer;
-    }
-    .result-table {
-      width: 100%;
-      border-collapse: collapse;
-      background: #fff;
-      border-radius: 6px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-      overflow: hidden;
-    }
-    .result-table th, .result-table td {
-      border: 1px solid #ccc;
-      padding: 10px;
-      text-align: left;
-      font-size: 0.95rem;
-    }
-    .back-link {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    .back-link a {
-      color: #007bff;
-      text-decoration: none;
       font-weight: 600;
+      margin-bottom: 8px;
     }
-    .back-link a:hover {
-      text-decoration: underline;
+
+    input,
+    button {
+      font: inherit;
+      max-width: 100%;
+    }
+
+    input {
+      display: block;
+      margin: 12px 0 20px;
+    }
+
+    button {
+      cursor: pointer;
+      background: #006b78;
+      color: white;
+      border: 0;
+      border-radius: 6px;
+      padding: 11px 16px;
+    }
+
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    :focus-visible {
+      outline: 3px solid #d39a28;
+      outline-offset: 3px;
+    }
+
+    pre {
+      overflow-x: auto;
+      background: #eef3f6;
+      border-radius: 6px;
+      padding: 16px;
+    }
+
+    .muted {
+      color: #526675;
+    }
+
+    .error {
+      color: #932626;
     }
   </style>
 </head>
+
 <body>
+  <main>
+    <nav aria-label="Main navigation">
+      <a href="/">Research demo</a>
+      <a href="/batch" aria-current="page">Batch prediction</a>
+    </nav>
 
-  <h2>Batch Prediction Upload</h2>
+    <h1>Batch prediction</h1>
+    <p>
+      Submit local BioKG drug indices and recorded relation IDs.
+      Results contain uncalibrated model scores, not clinical probabilities.
+    </p>
 
-  <div class="back-link">
-    <a href="/">← Back to Home</a>
-  </div>
+    {% if prediction_error %}
+    <section class="notice" role="status">
+      <strong>Predictions unavailable</strong>
+      <p>
+        A compatible trained and evaluated checkpoint is required
+        before batch scoring can run.
+      </p>
+    </section>
+    {% endif %}
 
-  <form method="POST" action="/batch" enctype="multipart/form-data">
-    <label for="csv_file">Upload CSV File:</label>
-    <input type="file" name="csv_file" id="csv_file" accept=".csv" required />
-    <button type="submit">Upload and Predict</button>
-  </form>
+    <section class="card">
+      <h2>Upload a CSV</h2>
 
-  <div style="margin-top: 20px; background: #fff; border: 1px solid #ccc; padding: 15px; border-radius: 8px;">
-    <h4 style="margin-bottom: 10px;">📄 Required CSV Format:</h4>
-    <p>The CSV file should include the following columns:</p>
-    <pre style="background: #f5f5f5; padding: 10px; border-radius: 6px; overflow-x: auto;">
-  drug1_id,drug2_id,relation_type
-  58,89,drug-drug_cancer
-  102,67,drug-drug_gene
-  ...</pre>
-    <p><strong>Note:</strong> Headers are required. Relation type must match available types from the home page dropdown.</p>
-  </div>
+      <form id="batch-form" method="POST" action="/batch" enctype="multipart/form-data">
+        <label for="csv_file">CSV file</label>
+        <input type="file" name="csv_file" id="csv_file" accept=".csv,text/csv" required>
 
-  {% if predictions %}
-  <h3>Batch Predictions:</h3>
-  <table class="result-table">
-    <thead>
-      <tr>
-        <th>Drug 1</th>
-        <th>Drug 2</th>
-        <th>Relation</th>
-        <th>Probability</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in predictions %}
-      <tr>
-        <td>{{ row.drug1 }}</td>
-        <td>{{ row.drug2 }}</td>
-        <td>{{ row.relation }}</td>
-        <td>{{ row.prediction | round(4) }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endif %}
+        <button id="upload-button" type="submit" {% if prediction_error %}disabled{% endif %}>
+          Upload and score
+        </button>
+      </form>
 
+      <p id="batch-status" role="status" aria-live="polite"></p>
+
+      <p>
+        <a id="download-link" hidden>Download predictions.csv</a>
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Required format</h2>
+
+      <pre><code>drug1_id,drug2_id,relation_type
+58,89,2</code></pre>
+
+      <ul>
+        <li>Include the three headers exactly as shown.</li>
+        <li>
+          Use nonnegative integer local drug indices and distinct drugs
+          in each row.
+        </li>
+        <li>
+          Choose a supported drug-drug relation ID from the
+          <a href="/">homepage dropdown</a>.
+        </li>
+        <li>
+          DrugBank IDs and PubChem CIDs are not accepted as local indices.
+        </li>
+      </ul>
+
+      <p>
+        The output includes <code>uncalibrated_model_score</code>
+        and <code>error</code>.
+        Invalid rows receive an error and no score.
+      </p>
+    </section>
+
+    <p class="muted">
+      Batch scores do not establish an adverse interaction or the safety
+      of taking two drugs together.
+    </p>
+  </main>
+
+  <script>
+    const form = document.getElementById('batch-form');
+    const button = document.getElementById('upload-button');
+    const status = document.getElementById('batch-status');
+    const download = document.getElementById('download-link');
+    const modelReady = JSON.parse('{{ (not prediction_error) | tojson }}');
+    let downloadUrl = null;
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+
+      if (!modelReady || !form.reportValidity()) return;
+
+      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+
+      download.hidden = true;
+      status.className = '';
+      status.textContent = 'Scoring uploaded rows…';
+      button.disabled = true;
+
+      try {
+        const response = await fetch('/batch', {
+          method: 'POST',
+          body: new FormData(form)
+        });
+
+        if (!response.ok) {
+          let message = `Batch request failed (${response.status}).`;
+
+          try {
+            const body = await response.json();
+            message = body.error || message;
+          } catch { }
+
+          throw new Error(message);
+        }
+
+        if (
+          !(response.headers.get('content-type') || '')
+            .includes('text/csv')
+        ) {
+          throw new Error('The server did not return a CSV result.');
+        }
+
+        downloadUrl = URL.createObjectURL(await response.blob());
+        download.href = downloadUrl;
+        download.download = 'predictions.csv';
+        download.hidden = false;
+
+        status.textContent =
+          'Results are ready. Download the CSV and inspect its error column.';
+      } catch (error) {
+        status.className = 'error';
+        status.textContent = error.message;
+      } finally {
+        button.disabled = !modelReady;
+      }
+    });
+
+    window.addEventListener('pagehide', () => {
+      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+    });
+  </script>
 </body>
+
 </html>

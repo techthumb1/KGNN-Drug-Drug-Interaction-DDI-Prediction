@@ -2,12 +2,15 @@ services:
   - type: web
     name: kgnn-ddi-app
     runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT
+    buildCommand: pip install torch --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt && python prepare_runtime.py
+    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers 1 --timeout 600
+    healthCheckPath: /healthz
     envVars:
-      - key: MODEL_URL
-        value: https://drive.google.com/uc?id=1gq5IBHbkcGvZiZAHz2aeR5ZjymgdgSuE
-      - key: DRUGBANK_JSON_URL
-        value: https://drive.google.com/uc?id=1fv5LBdbUsHGrIaM-_HxiVs9HXtsdpZTt
-      - key: DRUGBANK_XML_URL
-        value: https://drive.google.com/uc?id=1CClA1W7eRaydCtsYJRS5Gm1T2DZzbT6P
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_SECRET_KEY
+        generateValue: true
+      - key: ENABLE_PREDICTIONS
+        value: "false"
+      - key: PYTHON_VERSION
+        value: 3.11.12

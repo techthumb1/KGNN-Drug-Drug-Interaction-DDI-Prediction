@@ -1,60 +1,110 @@
-from flask import request, render_template, send_file
-import pandas as pd
-import torch
+import csv
 import io
-from src.utils.model import model, graph, rel_type_to_id
+
+from flask import (
+    request,
+    render_template,
+    send_file,
+    jsonify,
+)
+
+from src.utils import model as runtime
+from backend.app.routes.predict import score_request
+
 
 def register_batch(app):
     @app.route("/batch", methods=["GET", "POST"])
     def batch():
-        if request.method == "POST":
-            file = request.files["file"]
-            if not file or not file.filename.endswith(".csv"):
-                return render_template("batch.html", error="Please upload a valid CSV file.")
-
-            df = pd.read_csv(file)
-            results = []
-
-            for _, row in df.iterrows():
-                try:
-                    d1 = int(row["drug1_id"])
-                    d2 = int(row["drug2_id"])
-                    rel = row["relation_type"]
-                    matched_rel = next((k for k in rel_type_to_id if k[1] == rel), None)
-
-                    if matched_rel is None:
-                        score = "Invalid relation"
-                    else:
-                        src_type, _, dst_type = matched_rel
-                        out = model(graph.x_dict, flat_edge_index, flat_edge_type)
-                        emb1 = out[:graph[src_type].num_nodes][d1]
-                        emb2 = out[:graph[dst_type].num_nodes][d2]
-                        score = torch.sigmoid((emb1 * emb2).sum()).item()
-
-                    results.append({
-                        "drug1_id": d1,
-                        "drug2_id": d2,
-                        "relation_type": rel,
-                        "predicted_score": score
-                    })
-                except Exception as e:
-                    results.append({
-                        "drug1_id": row.get("drug1_id", ""),
-                        "drug2_id": row.get("drug2_id", ""),
-                        "relation_type": row.get("relation_type", ""),
-                        "predicted_score": str(e)
-                    })
-
-            df_out = pd.DataFrame(results)
-            buffer = io.StringIO()
-            df_out.to_csv(buffer, index=False)
-            buffer.seek(0)
-
-            return send_file(
-                io.BytesIO(buffer.read().encode()),
-                mimetype='text/csv',
-                download_name='predictions.csv',
-                as_attachment=True
+        if request.method == "GET":
+            return render_template(
+                "batch.html",
+                prediction_error=runtime.prediction_error,
             )
 
-        return render_template("batch.html")
+        if runtime.prediction_error:
+            return jsonify(
+                error=runtime.prediction_error,
+                status="prediction_unavailable",
+            ), 503
+
+        upload = request.files.get("csv_file")
+
+        if (
+            not upload
+            or not upload.filename.lower().endswith(".csv")
+        ):
+            return jsonify(
+                error="Upload a CSV using the csv_file field"
+            ), 400
+
+        try:
+            reader = csv.DictReader(
+                io.StringIO(
+                    upload.read().decode("utf-8-sig")
+                )
+            )
+            required = [
+                "drug1_id",
+                "drug2_id",
+                "relation_type",
+            ]
+
+            if (
+                not reader.fieldnames
+                or not set(required).issubset(
+                    reader.fieldnames
+                )
+            ):
+                raise ValueError(
+                    "CSV requires drug1_id, drug2_id, "
+                    "relation_type headers"
+                )
+
+            buffer = io.StringIO()
+            fields = required + [
+                "uncalibrated_model_score",
+                "error",
+            ]
+            writer = csv.DictWriter(
+                buffer,
+                fieldnames=fields,
+            )
+            writer.writeheader()
+
+            for row in reader:
+                try:
+                    result = score_request(row)
+                    writer.writerow(
+                        {
+                            key: result.get(key, "")
+                            for key in fields
+                        }
+                    )
+                except (
+                    ValueError,
+                    TypeError,
+                    KeyError,
+                ) as error:
+                    writer.writerow(
+                        {
+                            **{
+                                key: row.get(key, "")
+                                for key in required
+                            },
+                            "error": str(error),
+                        }
+                    )
+
+        except (
+            ValueError,
+            UnicodeDecodeError,
+            csv.Error,
+        ) as error:
+            return jsonify(error=str(error)), 400
+
+        return send_file(
+            io.BytesIO(buffer.getvalue().encode()),
+            mimetype="text/csv",
+            download_name="predictions.csv",
+            as_attachment=True,
+        )

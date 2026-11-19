@@ -1,45 +1,109 @@
+"""Source data works independently of an optional evaluated model."""
+import logging
+import os
+
 import torch
-from src.models.rgcn_model import RGCN
+
 from src.data.load_biokg import load_biokg_as_hetero
+from src.utils.checkpoint import load_checkpoint
+from src.utils.graph_contract import (
+    graph_contract,
+    flatten_graph,
+    query_indices,
+)
 from src.utils.mapping_loader import load_entity_mappings
+from src.utils.paths import BIOKG_MAPPING_DIR, MODEL_CHECKPOINT
 
-# Device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device(
+    "cuda" if torch.cuda.is_available() else "cpu"
+)
 
-# Load heterogeneous BioKG graph
-graph = load_biokg_as_hetero().to(device)
+graph = load_biokg_as_hetero()
+contract = graph_contract(graph)
+entity_mappings = load_entity_mappings(
+    str(BIOKG_MAPPING_DIR)
+)
+rel_type_to_id = {
+    tuple(key): i
+    for i, key in enumerate(contract["relations"])
+}
 
-# Metadata for node/edge types
-metadata = graph.metadata()
-num_nodes_dict = {k: v.num_nodes for k, v in graph.node_items()}
-rel_type_to_id = {rel: i for i, rel in enumerate(graph.edge_types)}
+model = embeddings = None
+prediction_error = (
+    "Predictions unavailable: train and evaluate "
+    "a version 2 checkpoint."
+)
 
-# Build flattened edge_index and edge_type for RGCN
-edge_types, edge_indices = [], []
-for (src, rel, dst), edge_index in graph.edge_index_dict.items():
-    edge_types.append(torch.full((edge_index.size(1),), rel_type_to_id[(src, rel, dst)]))
-    edge_indices.append(edge_index)
+if os.getenv("ENABLE_PREDICTIONS", "false").lower() == "true":
+    try:
+        model, checkpoint = load_checkpoint(
+            MODEL_CHECKPOINT,
+            contract,
+            device,
+        )
 
-flat_edge_index = torch.cat(edge_indices, dim=1)
-flat_edge_type = torch.cat(edge_types, dim=0)
+        edges, edge_types = flatten_graph(
+            graph,
+            contract,
+            device,
+        )
+        x_dict = {
+            kind: graph[kind].x.to(device)
+            for kind in contract["node_types"]
+        }
 
-# Initialize RGCN
-model = RGCN(
-    metadata=metadata,
-    num_nodes_dict=num_nodes_dict,
-    hidden_channels=64,
-    out_channels=2,
-    num_layers=2
-).to(device)
+        with torch.inference_mode():
+            embeddings = model(
+                x_dict,
+                edges,
+                edge_types,
+            )
 
-# Load pretrained RGCN checkpoint
-checkpoint = torch.load("models/model_checkpoint.pt", map_location=device)
-model.load_state_dict(checkpoint["model_state_dict"])
-model.eval()
+        if not torch.isfinite(embeddings).all():
+            raise ValueError("Nonfinite model embeddings")
 
-# Entity name mapping
-entity_mappings = load_entity_mappings("dataset/ogbl_biokg/mapping")
+        prediction_error = None
+    except (
+        OSError,
+        ValueError,
+        RuntimeError,
+        KeyError,
+    ) as error:
+        model = embeddings = None
+        prediction_error = (
+            f"Predictions unavailable: {error}"
+        )
+        logging.getLogger(__name__).warning(
+            prediction_error
+        )
 
-# Debug info
-print(f"✅ flat_edge_index shape: {flat_edge_index.shape}")
-print(f"✅ flat_edge_type shape: {flat_edge_type.shape}")
+
+class PredictionUnavailable(RuntimeError):
+    pass
+
+
+def predict_score(first, relation, second):
+    head, rel, tail = query_indices(
+        contract,
+        first,
+        relation,
+        second,
+    )
+
+    if prediction_error:
+        raise PredictionUnavailable(prediction_error)
+
+    with torch.inference_mode():
+        score = model.score(
+            embeddings,
+            torch.tensor(head, device=device),
+            torch.tensor(rel, device=device),
+            torch.tensor(tail, device=device),
+        ).sigmoid().item()
+
+    if not 0 <= score <= 1:
+        raise PredictionUnavailable(
+            "Nonfinite model score"
+        )
+
+    return score

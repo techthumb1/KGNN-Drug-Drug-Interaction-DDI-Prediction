@@ -1,40 +1,132 @@
-import os
+"""Official BioKG loading without globally overriding torch.load."""
+from pathlib import Path
 import shutil
+import tempfile
+import zipfile
+
+import numpy as np
+import pandas as pd
 import torch
 from ogb.linkproppred import LinkPropPredDataset
-from torch_geometric.transforms import ToUndirected
 from torch_geometric.data import HeteroData
 
-# Fix: Avoid recursive torch.load override
-original_torch_load = torch.load
-torch.load = lambda *args, **kwargs: original_torch_load(*args, **{**kwargs, "weights_only": False})
+from src.utils.paths import DATASET_ROOT
 
 
-def load_biokg_as_hetero():
-    dataset_root = "dataset/biokg"
+class BioKGDataset(LinkPropPredDataset):
+    def pre_process(self):
+        cached = Path(self.root) / "processed" / "data_processed"
 
-    # CLEANUP STEP: Remove partially extracted dataset if exists
-    if os.path.exists(os.path.join(dataset_root, "raw")):
-        print("[WARN] Removing existing dataset directory to prevent OGB crash...")
-        shutil.rmtree(dataset_root)
+        if cached.exists():
+            # Only OGB's trusted NumPy cache needs pickle compatibility.
+            self.graph = torch.load(cached, weights_only=False)
+        else:
+            super().pre_process()
 
-    # Download and extract dataset cleanly
-    dataset = LinkPropPredDataset(name="ogbl-biokg", root=dataset_root)
-    data = dataset[0]
+    def load_split(self, name):
+        if name not in ("train", "valid", "test"):
+            raise ValueError("Unknown official split")
 
-    hetero_data = HeteroData()
-    edge_index_dict = data['edge_index_dict']
-    num_nodes_dict = data['num_nodes_dict']
+        return torch.load(
+            Path(self.root) / "split" / "random" / f"{name}.pt",
+            weights_only=False,
+        )
 
-    # Add node types with dummy features
-    for node_type, count in num_nodes_dict.items():
-        hetero_data[node_type].x = torch.arange(count)
 
-    # Add edges per relation
-    for (src, rel, dst), edge_index in edge_index_dict.items():
-        hetero_data[(src, rel, dst)].edge_index = torch.tensor(edge_index, dtype=torch.long)
+def load_dataset():
+    root = DATASET_ROOT / "ogbl_biokg"
 
-    # Optionally make graph undirected
-    hetero_data = ToUndirected()(hetero_data)
+    if not (
+        (root / "processed" / "data_processed").exists()
+        or (root / "raw" / "triplet-type-list.csv.gz").exists()
+    ):
+        import ogb
+        from src.utils.data_loader import download_file
 
-    return hetero_data
+        metadata = pd.read_csv(
+            Path(ogb.__file__).parent / "linkproppred" / "master.csv",
+            index_col=0,
+        )
+        url = metadata["ogbl-biokg"]["url"].replace(
+            "http://", "https://", 1
+        )
+        archive = DATASET_ROOT / "biokg.zip"
+        download_file(url, archive)
+
+        with tempfile.TemporaryDirectory(
+            dir=DATASET_ROOT, prefix="biokg-extract-"
+        ) as temporary:
+            extraction = Path(temporary)
+
+            with zipfile.ZipFile(archive) as bundle:
+                for member in bundle.infolist():
+                    destination = (
+                        extraction / member.filename
+                    ).resolve()
+                    if not destination.is_relative_to(
+                        extraction.resolve()
+                    ):
+                        raise RuntimeError("Unsafe BioKG archive path")
+
+                bundle.extractall(extraction)
+
+            if root.exists():
+                shutil.copytree(
+                    extraction / "biokg",
+                    root,
+                    dirs_exist_ok=True,
+                )
+            else:
+                (extraction / "biokg").replace(root)
+
+        archive.unlink()
+
+    return BioKGDataset(
+        name="ogbl-biokg",
+        root=str(DATASET_ROOT),
+    )
+
+
+def graph_from_split(num_nodes_dict, split):
+    """Construct message-passing data from official training triples."""
+    graph = HeteroData()
+
+    for kind, count in sorted(num_nodes_dict.items()):
+        graph[kind].num_nodes = int(count)
+        graph[kind].x = torch.arange(count)
+
+    groups = {}
+    for i, (head_type, relation, tail_type) in enumerate(
+        zip(
+            split["head_type"],
+            split["relation"],
+            split["tail_type"],
+        )
+    ):
+        key = (
+            str(head_type),
+            str(int(relation)),
+            str(tail_type),
+        )
+        groups.setdefault(key, []).append(i)
+
+    for key, indices in sorted(groups.items()):
+        graph[key].edge_index = torch.from_numpy(
+            np.stack(
+                [
+                    split["head"][indices],
+                    split["tail"][indices],
+                ]
+            )
+        ).long()
+
+    graph.validate(raise_on_error=True)
+    return graph
+
+
+def load_biokg_as_hetero(dataset=None):
+    dataset = dataset if dataset is not None else load_dataset()
+    return graph_from_split(
+        dataset[0]["num_nodes_dict"],
+        dataset.load_split("train"),
+    )

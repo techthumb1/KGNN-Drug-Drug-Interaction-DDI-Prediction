@@ -195,3 +195,8 @@ model_checkpoint.pt
 # DrugBank data
 backend/drugbank_data
 drugbank_data/
+
+# Research outputs
+models/*.pt
+models/*.evaluation.json
+predictions_v2_log.csv

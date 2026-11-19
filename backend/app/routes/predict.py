@@ -1,126 +1,182 @@
-from flask import request, jsonify, render_template, session, redirect, url_for
-from src.utils.model import model, graph, rel_type_to_id, entity_mappings
-from src.utils.model import model, graph, flat_edge_index, flat_edge_type, rel_type_to_id, entity_mappings
-from src.utils.id_resolver import resolve_pubchem_cid, resolve_umls_cui
-import torch
-import os
 import csv
-from datetime import datetime
+from datetime import datetime, timezone
 
-# Optional DrugBank Integration
-try:
-    from src.utils.drugbank_lookup import lookup_drug_by_cid
-    DRUGBANK_ENABLED = True
-except ImportError:
-    DRUGBANK_ENABLED = False
-    lookup_drug_by_cid = lambda cid: None
-try:
-    from utils.drugbank_full_lookup import lookup_full_drug_info
-    DRUGBANK_RICH_ENABLED = True
-except ImportError:
-    DRUGBANK_RICH_ENABLED = False
-    lookup_full_drug_info = lambda cid: None
+from flask import (
+    request,
+    jsonify,
+    render_template,
+    session,
+    redirect,
+    url_for,
+)
+
+from src.utils import model as runtime
+from src.utils.paths import PROJECT_ROOT
+from src.utils.drugbank_lookup import lookup_drug_by_cid
+from src.utils.drugbank_full_lookup import lookup_full_drug_info
+
+
+def parse_index(value):
+    if type(value) is int:
+        return value
+
+    if (
+        isinstance(value, str)
+        and value.isascii()
+        and value.isdecimal()
+    ):
+        return int(value)
+
+    raise ValueError(
+        "IDs must be nonnegative integer local drug indices"
+    )
+
+
+def score_request(data):
+    if not isinstance(data, dict) and not hasattr(data, "get"):
+        raise ValueError(
+            "Provide drug1_id, drug2_id and relation_type"
+        )
+
+    first = parse_index(data.get("drug1_id"))
+    second = parse_index(data.get("drug2_id"))
+    relation = data.get("relation_type")
+
+    if not isinstance(relation, str):
+        raise ValueError(
+            "Choose a supported drug-drug relation"
+        )
+
+    score = runtime.predict_score(
+        first,
+        relation,
+        second,
+    )
+    mappings = runtime.entity_mappings.get("drug", {})
+
+    result = {
+        "drug1_id": first,
+        "drug2_id": second,
+        "drug1_name": str(
+            mappings.get(first, f"drug:{first}")
+        ),
+        "drug2_name": str(
+            mappings.get(second, f"drug:{second}")
+        ),
+        "relation_type": relation,
+        "uncalibrated_model_score": score,
+    }
+
+    for number, index in ((1, first), (2, second)):
+        raw = str(mappings.get(index, ""))
+        cid = (
+            raw.removeprefix("CID").lstrip(":0")
+            if raw.startswith("CID")
+            else ""
+        )
+
+        result[f"drug{number}_info"] = (
+            lookup_drug_by_cid(cid)
+            if cid.isdecimal()
+            else None
+        )
+        result[f"drug{number}_full_info"] = (
+            lookup_full_drug_info(cid)
+            if cid.isdecimal()
+            else None
+        )
+
+    return result
 
 
 def register_predict(app):
-    @app.route("/predict", methods=["POST"])
+    @app.post("/predict")
     def predict():
         try:
-            data = request.get_json() if request.is_json else request.form
-
-            relation_str = data.get("relation_type", "drug-drug_cancer")
-            matched_rel = next((k for k in rel_type_to_id if k[1] == relation_str), None)
-
-            if matched_rel is None:
-                error_msg = f"Invalid relation type: {relation_str}"
-                return jsonify({"error": error_msg}) if request.is_json else render_template("index.html", error=error_msg)
-
-            src_type, _, dst_type = matched_rel
-            drug1_id = int(data["drug1_id"])
-            drug2_id = int(data["drug2_id"])
-
-            # Validate node ID range
-            max_src = graph[src_type].num_nodes
-            max_dst = graph[dst_type].num_nodes
-
-            if not (0 <= drug1_id < max_src):
-                error_msg = f"drug1_id out of range for type '{src_type}'. Max: {max_src - 1}"
-                return jsonify({"error": error_msg}) if request.is_json else render_template("index.html", error=error_msg)
-
-            if not (0 <= drug2_id < max_dst):
-                error_msg = f"drug2_id out of range for type '{dst_type}'. Max: {max_dst - 1}"
-                return jsonify({"error": error_msg}) if request.is_json else render_template("index.html", error=error_msg)
-
-            rel_id = rel_type_to_id[matched_rel]
-
-            # Run model
-            with torch.no_grad():
-                out = model(graph.x_dict, flat_edge_index, flat_edge_type)
-                emb1 = out[:graph[src_type].num_nodes][drug1_id]
-                emb2 = out[:graph[dst_type].num_nodes][drug2_id]
-                score = torch.sigmoid((emb1 * emb2).sum()).item()
-
-            # Resolve human-readable names
-            raw_name1 = entity_mappings.get(src_type, {}).get(drug1_id, f"{src_type}:{drug1_id}")
-            raw_name2 = entity_mappings.get(dst_type, {}).get(drug2_id, f"{dst_type}:{drug2_id}")
-
-            drug1_name = resolve_pubchem_cid(raw_name1) if raw_name1.startswith("CID") else (
-                resolve_umls_cui(raw_name1) if raw_name1.startswith("C") else raw_name1
+            result = score_request(
+                request.get_json(silent=True)
+                if request.is_json
+                else request.form
             )
-            drug2_name = resolve_pubchem_cid(raw_name2) if raw_name2.startswith("CID") else (
-                resolve_umls_cui(raw_name2) if raw_name2.startswith("C") else raw_name2
-            )
-
-            # Log to CSV
-            log_path = "predictions_log.csv"
-            log_fields = ['timestamp', 'drug1_id', 'drug2_id', 'relation_type', 'score']
-            log_data = [datetime.now().isoformat(), drug1_id, drug2_id, relation_str, score]
-
-            file_exists = os.path.isfile(log_path)
-            with open(log_path, mode='a', newline='') as f:
-                writer = csv.writer(f)
-                if not file_exists:
-                    writer.writerow(log_fields)
-                writer.writerow(log_data)
-
-            # Final response
-            response = {
-                "drug1_id": drug1_id,
-                "drug2_id": drug2_id,
-                "drug1_name": drug1_name,
-                "drug2_name": drug2_name,
-                "relation_type": relation_str,
-                "predicted_interaction_probability": score
-            }
-            # Optional DrugBank info
-            cid1 = raw_name1.replace("CID:", "").lstrip("0") if raw_name1.startswith("CID") else None
-            cid2 = raw_name2.replace("CID:", "").lstrip("0") if raw_name2.startswith("CID") else None
-            
-            drug1_info = lookup_drug_by_cid(cid1) if cid1 else None
-            drug2_info = lookup_drug_by_cid(cid2) if cid2 else None
-
-            response["drug1_info"] = drug1_info
-            response["drug2_info"] = drug2_info
-            rich_drug1_info = lookup_full_drug_info(cid1) if cid1 else None
-            rich_drug2_info = lookup_full_drug_info(cid2) if cid2 else None
-
-            response["drug1_full_info"] = rich_drug1_info
-            response["drug2_full_info"] = rich_drug2_info
-
+        except runtime.PredictionUnavailable as error:
             if request.is_json:
-                return jsonify(response)
-            else:
-                session["prediction_result"] = {
-                    "prediction": score,
-                    "relation": relation_str,
-                    "drug1_id": drug1_id,
-                    "drug2_id": drug2_id,
-                    "drug1_name": drug1_name,
-                    "drug2_name": drug2_name
+                return jsonify(
+                    error=str(error),
+                    status="prediction_unavailable",
+                ), 503
+
+            return render_template(
+                "index.html",
+                error=str(error),
+                prediction_error=runtime.prediction_error,
+            ), 503
+
+        except (ValueError, TypeError, KeyError) as error:
+            if request.is_json:
+                return jsonify(error=str(error)), 400
+
+            return render_template(
+                "index.html",
+                error=str(error),
+                prediction_error=runtime.prediction_error,
+            ), 400
+
+        # Keep legacy prediction logs separate from corrected scores.
+        path = PROJECT_ROOT / "predictions_v2_log.csv"
+        exists = path.exists()
+
+        with path.open("a", newline="") as output:
+            writer = csv.writer(output)
+
+            if not exists:
+                writer.writerow(
+                    [
+                        "timestamp",
+                        "drug1_id",
+                        "drug2_id",
+                        "relation_type",
+                        "uncalibrated_model_score",
+                    ]
+                )
+
+            writer.writerow(
+                [
+                    datetime.now(timezone.utc).isoformat(),
+                    result["drug1_id"],
+                    result["drug2_id"],
+                    result["relation_type"],
+                    result["uncalibrated_model_score"],
+                ]
+            )
+
+        if request.is_json:
+            return jsonify(result)
+
+        browser_result = dict(result)
+
+        for number in (1, 2):
+            info = result.get(
+                f"drug{number}_full_info"
+            )
+            if info:
+                browser_result[
+                    f"drug{number}_full_info"
+                ] = {
+                    key: info.get(key)
+                    for key in (
+                        "cas",
+                        "type",
+                        "drugbank_id",
+                    )
                 }
+                browser_result[
+                    f"drug{number}_full_info"
+                ].update(
+                    description=str(
+                        info.get("description", "")
+                    )[:200],
+                    targets=info.get("targets", [])[:3],
+                )
 
-                return redirect(url_for("index"))
-
-
-        except Exception as e:
-            return jsonify({"error": str(e)}) if request.is_json else render_template("index.html", error=str(e))
+        session["prediction_result"] = browser_result
+        return redirect(url_for("index"))

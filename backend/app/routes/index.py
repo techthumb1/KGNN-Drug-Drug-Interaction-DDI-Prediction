@@ -1,24 +1,44 @@
-from flask import render_template, jsonify, request, session, send_file
-from src.utils.model import model, graph, rel_type_to_id
-from src.utils.id_resolver import resolve_pubchem_cid, resolve_umls_cui
-import os
+from flask import (
+    render_template,
+    jsonify,
+    session,
+    send_file,
+)
+
+from src.utils import model as runtime
+from src.utils.paths import PROJECT_ROOT
+
 
 def register_index(app):
-    @app.route("/", methods=["GET"])
+    @app.get("/")
     def index():
-        result = session.pop("prediction_result", None)
-        error = request.args.get("error")
-        return render_template("index.html", prediction_result=result, error=error)
+        return render_template(
+            "index.html",
+            prediction_result=session.pop(
+                "prediction_result", None
+            ),
+            prediction_error=runtime.prediction_error,
+            drug_count=runtime.graph["drug"].num_nodes,
+        )
 
-    @app.route("/relations", methods=["GET"])
+    @app.get("/relations")
     def get_relation_types():
-        return jsonify(sorted(set(k[1] for k in rel_type_to_id)))
+        return jsonify(
+            sorted(
+                {
+                    key[1]
+                    for key in runtime.rel_type_to_id
+                    if key[0] == key[2] == "drug"
+                }
+            )
+        )
 
-    @app.route("/download_log", methods=["GET"])
+    @app.get("/download_log")
     def download_log():
-        log_path = "predictions_log.csv"
-        if os.path.exists(log_path):
-            return send_file(log_path, as_attachment=True)
+        path = PROJECT_ROOT / "predictions_v2_log.csv"
+        if path.exists():
+            return send_file(
+                path,
+                as_attachment=True,
+            )
         return "No prediction log found.", 404
-
-    return app
