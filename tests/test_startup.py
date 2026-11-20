@@ -265,7 +265,7 @@ class BootTests(unittest.TestCase):
             ),
             patch.dict(
                 os.environ,
-                {"FLASK_ENV": "production"},
+                {"FLASK_ENV": "production", "FLASK_SECRET_KEY": "synthetic-test-session-key"},
             ),
         ):
             return importlib.import_module("run").app

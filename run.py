@@ -18,7 +18,13 @@ app = Flask(
     template_folder=BASE_DIR / "backend" / "app" / "templates",
     static_folder=BASE_DIR / "backend" / "app" / "static",
 )
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "supersecretkey")
+app.secret_key = os.getenv("FLASK_SECRET_KEY")
+if not app.secret_key:
+    if os.getenv("FLASK_ENV") == "production":
+        raise RuntimeError("Set a private FLASK_SECRET_KEY for production")
+    import secrets
+
+    app.secret_key = secrets.token_hex(32)
 
 try:
     from src.utils.data_loader import ensure_required_files

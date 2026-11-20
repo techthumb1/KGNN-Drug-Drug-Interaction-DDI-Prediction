@@ -92,13 +92,20 @@ Verification performed during the refresh included:
 - 39 Python regression tests covering startup, transfers, indexing, scoring, optimization, checkpoint rejection and routes.
 - DOM/D3 checks for rendering, filtering, truncation and entity inspection.
 - Startup and graph checks using actual official BioKG data.
-- One actual optimization step and execution checks on 16 validation rows and 16 test rows.
+- A 100-step training run on the official training graph (seed 42, batch size 1024, hidden size 64, learning rate 0.001), followed by complete validation and fixed-weight test evaluation.
 
-Those small evaluation subsets establish execution only. They are not estimates of DDI prediction quality. Full model training, complete held-out evaluation, calibration and validated explanations remain outstanding.
+The 100-step demonstration candidate produced these official ranking results:
+
+| Split | Evaluated triples | Overall MRR |
+| --- | ---: | ---: |
+| Validation | 162,886 | 0.148652 |
+| Test | 162,870 | 0.147863 |
+
+Test evaluation used the same selected weights without retraining. The exact-triple audit found zero training overlaps in both held-out splits. These are results for a single 100-step demonstration recipe, not a convergence claim or a tuned benchmark. Scores remain uncalibrated; validated explanations remain unimplemented.
 
 ## Setup
 
-Use Python 3.11 or 3.12. For a CPU host:
+Use Python 3.11, matching deployment and CI. For a CPU host:
 
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cpu
@@ -109,7 +116,7 @@ python run.py
 
 Open `http://localhost:8080`.
 
-Initial preparation downloads the official BioKG archive and prepares `dataset/ogbl_biokg`. This requires access to the official Stanford download host and several GB of disk space. Model-enabled processes also require memory for the encoder and cached embeddings.
+`prepare_runtime.py` prepares and verifies the source graph and mappings, and verifies the evaluated checkpoint when predictions are enabled. It does not optimize model weights. Initial preparation downloads the official BioKG archive and prepares `dataset/ogbl_biokg`. This requires access to the official Stanford download host and several GB of disk space. Model-enabled processes also require memory for the encoder and cached embeddings.
 
 Only the trusted OGB cache/splits use pickle-compatible loading. Model checkpoints use `weights_only=True`; the loader does not globally override `torch.load`.
 
@@ -126,11 +133,13 @@ python -m src.train.train_rgcn --steps 1 --batch-size 32 \
 python -m src.train.train_rgcn --steps 100 --batch-size 1024 \
   --output models/rgcn_candidate.pt
 
-# After fixing the recipe using validation, evaluate the official test split.
-# Omit --max-eval to produce complete validation and test reports.
-python -m src.train.train_rgcn --steps 100 --batch-size 1024 \
-  --evaluate-test --output models/rgcn_v2.pt
+# After complete validation, evaluate the same selected weights on the test split.
+python -m src.train.evaluate_checkpoint --checkpoint models/rgcn_candidate.pt \
+  --selection-note "Selected using full validation; recipe frozen before test" \
+  --output models/rgcn_v2.pt
 ```
+
+`train_rgcn` evaluates validation only and defaults to `models/rgcn_candidate.pt`. The old `--evaluate-test` option is rejected because it retrained instead of evaluating the selected artifact. The finalizer preserves the candidate, audits exact split separation and records complete test results without changing its weights. Optimizer state stays in the training candidate and is omitted from the smaller serving artifact. It rejects incomplete validation and existing output paths.
 
 The example 100-step configuration is not a validated training budget. Full-graph R-GCN training can require substantial memory. Inspect overall and per-relation results before deciding whether the model is useful for the intended research task.
 
@@ -147,7 +156,7 @@ Create or locate a **Web Service** connected to this repository. Use the reposit
 | Health check | `/healthz` |
 | Initial environment | `FLASK_ENV=production`, `ENABLE_PREDICTIONS=false`, a private `FLASK_SECRET_KEY` |
 
-For a Blueprint, synchronize `render.yaml`. Existing manually configured services require their dashboard commands and environment to be updated directly. The existing Fly.io workflow does not deploy the Render service.
+For a Blueprint, synchronize `render.yaml`. Existing manually configured services require their dashboard commands and environment to be updated directly. The existing Fly.io workflow does not deploy the Render service. Production startup requires a private `FLASK_SECRET_KEY`; the application no longer falls back to a shared key.
 
 A provider response containing `x-render-routing: no-server` requires checking the exact service hostname, workspace, service existence/status and deployment logs. Changing Flask routes or billing details alone does not establish that a serving instance exists.
 
@@ -177,6 +186,17 @@ NODE_PATH=/tmp/ddi-dom/node_modules node tests/test_graph_dom.cjs
 ```
 
 The DOM checks use Node 24+. Test fixtures are synthetic and are never served as replacement biomedical data. Passing tests does not establish prediction accuracy or a successful production deployment.
+
+## Notebooks
+
+The two existing notebooks now use the same typed indexing, graph contract, model and checkpoint loader as the application. Saved outputs are cleared.
+
+| Notebook | Contents |
+| --- | --- |
+| [01 — Training graph and recorded relationships](notebooks/01_ogbl_biokg_eda.ipynb) | Official data, source counts, exact split audit and bounded recorded neighborhoods |
+| [02 — Training, evaluation and checkpoint verification](notebooks/02_ogbl_biokg_eda.ipynb) | Candidate training, full validation, fixed-weight test evaluation and checkpoint scoring |
+
+Install `requirements-notebooks.txt` alongside `requirements.txt` in your Python 3.11 kernel. Set `BIOKG_NOTEBOOK_RUN_DATA=1` before starting the kernel to load official data; set `BIOKG_NOTEBOOK_AUDIT_SPLITS=1` for the full split audit. In notebook 02, set `RUN_TRAINING=True` to train. After reviewing complete validation, set `RUN_TEST_EVALUATION=True` and record your selection decision to finalize the selected weights. Scoring has its own explicit flag and requires the evaluated artifact. Defaults skip expensive operations so opening a notebook does not start training.
 
 ## Images and article series
 

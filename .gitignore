@@ -200,3 +200,4 @@ drugbank_data/
 models/*.pt
 models/*.evaluation.json
 predictions_v2_log.csv
+artifacts/notebooks/

@@ -435,7 +435,7 @@ class RouteTests(unittest.TestCase):
             ),
             patch.dict(
                 "os.environ",
-                {"FLASK_ENV": "production"},
+                {"FLASK_ENV": "production", "FLASK_SECRET_KEY": "synthetic-test-session-key"},
             ),
         ):
             self.app = importlib.import_module("run").app

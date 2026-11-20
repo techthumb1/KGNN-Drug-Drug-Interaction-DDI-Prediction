@@ -158,6 +158,11 @@ def optimize_step(
 
 
 def train(args):
+    if args.evaluate_test:
+        raise ValueError(
+            "Select weights using validation first, then run "
+            "python -m src.train.evaluate_checkpoint on that fixed checkpoint"
+        )
     if (
         args.steps < 1
         or args.batch_size < 1
@@ -269,11 +274,7 @@ def train(args):
         )
 
     evaluation = {}
-    names = (
-        ("valid", "test")
-        if args.evaluate_test
-        else ("valid",)
-    )
+    names = ("valid",)
 
     for name in names:
         evaluation[name] = evaluate_split(
@@ -366,10 +367,11 @@ def main():
     parser.add_argument(
         "--evaluate-test",
         action="store_true",
+        help="Retired: use src.train.evaluate_checkpoint on validation-selected weights",
     )
     parser.add_argument(
         "--output",
-        default="models/rgcn_v2.pt",
+        default="models/rgcn_candidate.pt",
     )
 
     train(parser.parse_args())

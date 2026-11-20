@@ -21,7 +21,8 @@ def load_checkpoint(
     )
 
     if (
-        checkpoint.get("format") != FORMAT
+        not isinstance(checkpoint, dict)
+        or checkpoint.get("format") != FORMAT
         or checkpoint.get("graph_contract") != contract
     ):
         raise ValueError(
