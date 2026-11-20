@@ -30,7 +30,23 @@ Inputs are **local BioKG drug indices**, not DrugBank identifiers or PubChem CID
 
 The graph view returns incident relationships for either selected drug. It does not imply that the two drugs share a direct edge or cause an adverse interaction.
 
-Optional DrugBank metadata requires files you are authorized to use. Missing enrichment files do not need to be replaced with fabricated data.
+BioKG and DrugBank serve different purposes in this application:
+
+| Source | Current role |
+| --- | --- |
+| OGB BioKG | Recorded heterogeneous training graph and the benchmark splits used to train/evaluate the R-GCN |
+| DrugBank | Lookup of drug names, DrugBank IDs, CAS numbers, descriptions and targets for matching PubChem CIDs |
+
+DrugBank integration remains in `src/utils/drugbank_lookup.py`, `src/utils/drugbank_full_lookup.py`, `src/utils/parse_drugbank_xml.py` and the prediction result page. Your DrugBank records are not added to the current training graph, and their interaction descriptions do not determine model scores. No real DrugBank files were available in the verified run, so that run displayed BioKG identifiers without DrugBank details.
+
+To use your existing authorized files, retain their original names under:
+
+- `backend/drugbank_data/drugbank_all_drug_links.csv` for the basic CID/name/DrugBank ID lookup.
+- `backend/drugbank_data/drugbank_slim.json` for the extended description/target lookup.
+
+The JSON records must use the schema produced by the existing XML parser (`pubchem`, `drugbank_id`, `name`, `cas`, `type`, `description`, `targets`, `interactions`). The CSV requires `PubChem Compound ID`, `DrugBank ID`, `Name`, `CAS Number` and `Drug Type` columns. A metadata card appears after a successful prediction when the BioKG PubChem CID matches a supplied record; it is not shown merely because DrugBank files exist. Restart the app after changing metadata files. Missing records produce no substituted metadata.
+
+If you have only an XML export, from the repository root run `python -m src.utils.parse_drugbank_xml /path/to/your-drugbank.xml` after creating `backend/drugbank_data/`. The existing parser creates the JSON lookup; it does not create the CSV. XML download alone does not load enrichment, and XML conversion is not run automatically. Existing supplied CSV/JSON files need no conversion.
 
 ## Application usage
 
@@ -105,7 +121,30 @@ Test evaluation used the same selected weights without retraining. The exact-tri
 
 ## Setup
 
-Use Python 3.11, matching deployment and CI. For a CPU host:
+Run all commands from the repository root, using Python 3.11 and your existing `.venv`. Install dependencies with `python -m pip install -r requirements.txt`; the CPU-host commands below also show a CPU-only PyTorch installation. On a Mac, use the normal PyTorch package from `requirements.txt`.
+
+### Local configuration
+
+The private `.env` is intentionally ignored by Git. The tracked `.env.example` documents the variables; it contains no private keys. Create a local configuration without overwriting an existing one:
+
+```bash
+python - <<'PY'
+from pathlib import Path
+import secrets
+config = Path(".env")
+if not config.exists():
+    template = Path(".env.example").read_text()
+    config.write_text(template.replace(
+        "FLASK_SECRET_KEY=", "FLASK_SECRET_KEY=" + secrets.token_hex(32), 1
+    ))
+PY
+```
+
+`FLASK_SECRET_KEY` signs Flask session cookies. It is not a DrugBank, OpenAI or model API key. A blank key generates a temporary key for local development. Production requires a persistent private value supplied through the host's environment settings; production does not load `.env`. Render's Blueprint declares `generateValue: true` for this key.
+
+### Start with recorded relationships
+
+Leave `ENABLE_PREDICTIONS=false` in `.env`, then run:
 
 ```bash
 pip install torch --index-url https://download.pytorch.org/whl/cpu
@@ -114,7 +153,13 @@ python prepare_runtime.py
 python run.py
 ```
 
-Open `http://localhost:8080`.
+Open `http://localhost:8080`. Enter local drug indices `58` and `89` and choose **View recorded relationships**. This graph view works without model weights. Initial BioKG preparation downloads the official dataset and needs several GB of disk space.
+
+### Enable the already trained model
+
+The trained 100-step checkpoint is a separate artifact, because `models/*.pt` is ignored by Git. Pulling source code does not install weights. From the completed-update archive, extract only `models/rgcn_v2.pt` into this repository's `models/` directory; there is no need to import its Git bundle after pulling the published changes. The archive also contains evaluation results.
+
+Change `.env` to `ENABLE_PREDICTIONS=true`, run `python prepare_runtime.py`, then `python run.py`. Check `http://localhost:8080/healthz` for `"predictions": "ready"`. On the homepage, enter `58` and `89`, select relation ID `10`, and choose **Predict**. Inputs are BioKG local indices; the returned value is an uncalibrated link score. The same pair/relation can be submitted on the batch page with `drug1_id,drug2_id,relation_type` CSV headers. Training commands in the next section are for retraining, not for installing this existing checkpoint.
 
 `prepare_runtime.py` prepares and verifies the source graph and mappings, and verifies the evaluated checkpoint when predictions are enabled. It does not optimize model weights. Initial preparation downloads the official BioKG archive and prepares `dataset/ogbl_biokg`. This requires access to the official Stanford download host and several GB of disk space. Model-enabled processes also require memory for the encoder and cached embeddings.
 
@@ -212,6 +257,7 @@ The six-part article series is a tutorial and proposed research progression. The
 
 ## Sources
 
+- [DrugBank drug-interaction documentation](https://dev.drugbank.com/guides/drug_interactions/overview)
 - [Official OGB BioKG dataset and evaluation protocol](https://ogb.stanford.edu/docs/linkprop/#ogbl-biokg)
 - [OGB BioKG reference implementations](https://github.com/snap-stanford/ogb/tree/master/examples/linkproppred/biokg)
 - [PyTorch Geometric heterogeneous graph data](https://pytorch-geometric.readthedocs.io/en/stable/generated/torch_geometric.data.HeteroData.html)
