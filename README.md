@@ -37,16 +37,20 @@ BioKG and DrugBank serve different purposes in this application:
 | OGB BioKG | Recorded heterogeneous training graph and the benchmark splits used to train/evaluate the R-GCN |
 | DrugBank | Lookup of drug names, DrugBank IDs, CAS numbers, descriptions and targets for matching PubChem CIDs |
 
-DrugBank integration remains in `src/utils/drugbank_lookup.py`, `src/utils/drugbank_full_lookup.py`, `src/utils/parse_drugbank_xml.py` and the prediction result page. Your DrugBank records are not added to the current training graph, and their interaction descriptions do not determine model scores. No real DrugBank files were available in the verified run, so that run displayed BioKG identifiers without DrugBank details.
+DrugBank integration remains in `src/utils/drugbank_lookup.py`, `src/utils/drugbank_full_lookup.py`, `src/utils/parse_drugbank_xml.py` and the prediction result page. Your DrugBank records are not added to the current training graph, and their interaction descriptions do not determine model scores. The initial graph-only verification had no local DrugBank cache. A subsequent run downloaded the existing prepared JSON from Google Drive, loaded 8,724 records with PubChem IDs and matched 1,328 BioKG drugs. Single prediction responses included real DrugBank metadata. Your existing Drive files remain the source when their URLs are configured.
 
-To use your existing authorized files, retain their original names under:
+For your existing Google Drive files, set `DRUGBANK_JSON_URL` to the file's existing Drive share/download URL in your private `.env` (local) or host environment settings (production). With predictions enabled, startup downloads the JSON once and reuses its cached copy on later starts. Drive remains the source; you do not need to move or re-upload the file. Standard Drive file-view URLs are accepted. The standalone app needs the URL to permit its download; ChatGPT's signed-in Drive connection is separate from the app's downloader.
+
+The configured JSON is read one record at a time, retaining only the display fields used by the application. Its large interaction arrays are not held in the lookup cache. When the prepared JSON is present, the full XML source is not downloaded again.
+
+These are automatic local cache paths, not instructions to manually relocate your Drive files:
 
 - `backend/drugbank_data/drugbank_all_drug_links.csv` for the basic CID/name/DrugBank ID lookup.
 - `backend/drugbank_data/drugbank_slim.json` for the extended description/target lookup.
 
 The JSON records must use the schema produced by the existing XML parser (`pubchem`, `drugbank_id`, `name`, `cas`, `type`, `description`, `targets`, `interactions`). The CSV requires `PubChem Compound ID`, `DrugBank ID`, `Name`, `CAS Number` and `Drug Type` columns. A metadata card appears after a successful prediction when the BioKG PubChem CID matches a supplied record; it is not shown merely because DrugBank files exist. Restart the app after changing metadata files. Missing records produce no substituted metadata.
 
-If you have only an XML export, from the repository root run `python -m src.utils.parse_drugbank_xml /path/to/your-drugbank.xml` after creating `backend/drugbank_data/`. The existing parser creates the JSON lookup; it does not create the CSV. XML download alone does not load enrichment, and XML conversion is not run automatically. Existing supplied CSV/JSON files need no conversion.
+The prepared JSON already contains the extended lookup; there is no need to reparse your XML when using it. If you have only an XML export, from the repository root run `python -m src.utils.parse_drugbank_xml /path/to/your-drugbank.xml` after creating `backend/drugbank_data/`. The existing parser creates the JSON lookup; it does not create the CSV. XML download alone does not load enrichment, and XML conversion is not run automatically. Existing supplied CSV/JSON files need no conversion.
 
 ## Application usage
 

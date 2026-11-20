@@ -88,6 +88,8 @@ def ensure_required_files():
         ("DRUGBANK_JSON_URL", "drugbank_slim.json"),
         ("DRUGBANK_XML_URL", "drugbank_all_drug_links.xml"),
     ):
+        if filename.endswith(".xml") and (DRUGBANK_DATA_DIR / "drugbank_slim.json").is_file():
+            continue  # Prepared JSON is sufficient; do not also fetch the full XML export.
         url = os.getenv(variable)
         if url:
             download_file(url, DRUGBANK_DATA_DIR / filename)
