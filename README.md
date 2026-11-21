@@ -20,7 +20,7 @@ This is not a clinical decision tool. Source relationships and model scores do n
 
 Predictions default to **unavailable**. The graph explorer can run without a model checkpoint, but still requires the official BioKG dataset.
 
-The legacy `/explain`, `/explain_graph` and `/explain_view` endpoints return HTTP 503. Random explanation weights, hard-coded SHAP values and untrained GraphSAGE inference have been disabled. Validated model attribution is not implemented.
+`/explain_view` now provides an exact DistMult decoder score decomposition for a supported pair/relation. `/explain` returns the full numerical explanation as JSON: every learned dimension's signed logit term, the score with that term removed, and positive/negative totals. This holds cached graph embeddings fixed; it does not attribute graph edges or assign biological meaning to dimensions. The DistMult decoder is symmetric for a fixed relation. Random weights, hard-coded SHAP values and untrained GraphSAGE inference remain disabled; `/explain_graph` still returns 503 because validated graph-edge attribution is not implemented.
 
 ## Data and identifiers
 
@@ -52,6 +52,14 @@ The JSON records must use the schema produced by the existing XML parser (`pubch
 
 The prepared JSON already contains the extended lookup; there is no need to reparse your XML when using it. If you have only an XML export, from the repository root run `python -m src.utils.parse_drugbank_xml /path/to/your-drugbank.xml` after creating `backend/drugbank_data/`. The existing parser creates the JSON lookup; it does not create the CSV. XML download alone does not load enrichment, and XML conversion is not run automatically. Existing supplied CSV/JSON files need no conversion.
 
+## Graph names, definitions and source evidence
+
+The graph explorer has zoom/pan/reset controls, a searchable entity list, a selected-entity inspector, named source-to-target relationships, a relationship table and JSON export. Entity-type filtering queries the source graph before truncation, so an early set of drug–drug edges cannot hide all protein or disease relationships.
+
+Graph nodes preserve the official typed local index and original source identifier. Available DrugBank names/descriptions are used immediately. Remaining names are resolved progressively through exact identifier lookups: UMLS CUIs through NCBI MedGen, compound CIDs through PubChem, Entrez Gene IDs through NCBI Gene, and GO IDs through EMBL-EBI QuickGO. For example, `C0578870` resolves to **chronic idiopathic urticaria** in MedGen. The inspector shows the source definition, semantic type or organism when supplied, source-record link, and recorded neighbors in the current bounded view. A disease node is a dataset category; it need not denote an interaction mechanism.
+
+Annotations use public services and require network access on a cold cache; only the requested source identifiers are sent, with no search text or whole medication-list submission. Successful annotations are cached for 30 days and missing records for one day under ignored `backend/drugbank_data/entity_metadata.sqlite3`. API failures remain explicit and do not replace identifiers with guessed names. These annotations do not add graph edges, alter model weights, or establish clinical causality. No new API keys or Python dependencies are required.
+
 ## Application usage
 
 ### Check a medication list by name
@@ -69,7 +77,7 @@ Single-ingredient products use an exact, unambiguous match to a canonical DrugBa
 
 1. Enter two distinct local drug indices on the homepage.
 2. Choose **View recorded relationships**. No prediction checkpoint or relation selection is required for this action.
-3. Filter entity types, drag nodes and select an entity to inspect its recorded identifier.
+3. Filter entity types, zoom/pan, search the entity list and select a node to inspect its name, source definition, identifiers and recorded connections. Use **Open model explanation** for a supported drug pair and relation.
 
 Indices `58` and `89` can be used as example inputs for the official dataset. They are not a validated clinical example.
 
@@ -96,7 +104,7 @@ The upload field is `csv_file`. The output includes `uncalibrated_model_score` a
 
 Corrected prediction history uses `predictions_v2_log.csv`, keeping it separate from legacy score logs. Render's ephemeral filesystem does not provide durable log storage across deployments.
 
-Named batch files can use `drug1,drug2,relation_type` columns with canonical names, DrugBank IDs or prefixed CIDs. Existing `drug1_id,drug2_id,relation_type` files retain strict local-index behavior. Output adds resolved drug names; unsupported model entities receive an error without a score. Graph entity filters keep the selected drug anchors and their relevant edges visible, and graph labels wrap rather than being silently shortened.
+Named batch files can use `drug1,drug2,relation_type` columns with canonical names, DrugBank IDs or prefixed CIDs. Existing `drug1_id,drug2_id,relation_type` files retain strict local-index behavior. Output adds resolved drug names; unsupported model entities receive an error without a score. Graph entity filters apply before the 100-edge limit and keep the selected drug anchors visible. Graph labels wrap; the default view labels selected drug anchors and the selected entity, with other names revealed on hover or using Show all labels.
 
 ## Model and checkpoint compatibility
 
@@ -134,7 +142,7 @@ The 100-step demonstration candidate produced these official ranking results:
 | Validation | 162,886 | 0.148652 |
 | Test | 162,870 | 0.147863 |
 
-Test evaluation used the same selected weights without retraining. The exact-triple audit found zero training overlaps in both held-out splits. These are results for a single 100-step demonstration recipe, not a convergence claim or a tuned benchmark. Scores remain uncalibrated; validated explanations remain unimplemented.
+Test evaluation used the same selected weights without retraining. The exact-triple audit found zero training overlaps in both held-out splits. These are results for a single 100-step demonstration recipe, not a convergence claim or a tuned benchmark. Scores remain uncalibrated. The app now exposes an exact decoder decomposition; validated biological or graph-edge attributions remain unimplemented.
 
 ## Setup
 
@@ -233,13 +241,16 @@ After deployment, verify the homepage, graph generation and health response. Wit
 | `GET /drugs/search?q=...` | Search generic/brand product names, synonyms, strengths, DrugBank IDs and prefixed CIDs; report vocabulary availability |
 | `POST /check` | Check 2–10 drugs against recorded DrugBank entries, with optional model comparison |
 | `GET /graph?drug1_id=58&drug2_id=89` | Recorded relationship viewer |
-| `GET /graph_data?drug1_id=58&drug2_id=89` | Bounded recorded neighborhood; invalid inputs return 400 |
+| `GET /graph_data?drug1_id=58&drug2_id=89` | Bounded recorded neighborhood; optional `entity_type` filter applies before truncation |
+| `POST /graph_entities` | Exact public annotations for 1–102 valid typed entity IDs of one type |
 | `POST /predict` | Corrected score, 400 for invalid input, or 503 when unavailable |
 | `GET /batch` | CSV upload page |
 | `POST /batch` | Result CSV or an input/availability error |
 | `GET /healthz` | Graph readiness and separate prediction/explanation availability |
 | `GET /download_log` | V2 prediction history, or 404 if no V2 log exists |
-| `GET /explain`, `/explain_graph`, `/explain_view` | 503; validated explanations unavailable |
+| `GET /explain` | Exact decoder contributions and dimension-removal scores as JSON; requires a ready model |
+| `GET /explain_view` | Interactive decoder explanation page |
+| `GET /explain_graph` | 503; graph-edge attribution unavailable |
 
 ## Tests
 
@@ -272,7 +283,7 @@ After deployment, capture new screenshots of:
 - The recorded relationship view using actual BioKG data.
 - The batch page, showing either its unavailable notice or actual results.
 
-The six-part article series is a tutorial and proposed research progression. The repository is a separate implementation. Validated explainers, genomic/temporal extensions and broader tutorial integrations must not be presented as implemented here. Article 1 remains unchanged; revisions to Articles 2–6 are separate writing deliverables.
+The six-part article series is a tutorial and proposed research progression. The repository is a separate implementation. Validated graph-edge explainers, genomic/temporal extensions and broader tutorial integrations must not be presented as implemented here. Article 1 remains unchanged; revisions to Articles 2–6 are separate writing deliverables.
 
 ## Sources
 

@@ -193,7 +193,6 @@
       supplies the recorded graph and model training data.
       <a href="https://go.drugbank.com/" target="_blank" rel="noopener noreferrer">DrugBank</a>
       supplies drug names, identifiers and target details when your local metadata files contain a matching record.
-      DrugBank metadata appears with matching prediction results and does not alter the model score.
     </p>
 
     {% if prediction_error %}
@@ -219,7 +218,7 @@
         <input id="drug-query" type="search" placeholder="Start typing a drug name, such as simvastatin"
           role="combobox" aria-autocomplete="list" aria-controls="drug-suggestions" aria-expanded="false" autocomplete="off">
         <ul id="drug-suggestions" class="suggestions" role="listbox" aria-label="Matching drugs" hidden></ul>
-        <p id="search-status" class="muted" role="status" aria-live="polite">Names come from your supplied DrugBank export. Only supported matches receive model scores.</p>
+        <p id="search-status" class="muted" role="status" aria-live="polite">Search generic and brand names from DrugBank and NLM RxTerms. Select a result to see available coverage.</p>
       </div>
       <ul id="selected-drugs" class="selected-drugs" aria-label="Selected drugs"></ul>
       <details class="research-options">
@@ -320,6 +319,8 @@
         <a href="/graph?drug1_id={{ prediction_result.drug1_id }}&amp;drug2_id={{ prediction_result.drug2_id }}">
           View recorded relationships
         </a>
+        ·
+        <a href="/explain_view?drug1_id={{ prediction_result.drug1_id }}&amp;drug2_id={{ prediction_result.drug2_id }}&amp;relation_type={{ prediction_result.relation_type }}">Explain model score</a>
         ·
         <a href="/download_log">Download prediction log</a>
       </p>

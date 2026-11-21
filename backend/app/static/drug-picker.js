@@ -132,6 +132,7 @@
         for (const description of pair.recorded_interactions) card.append(element('p', description, 'description'));
         if (pair.relation_type) card.append(element('p', pair.model_status === 'ready' ?
           `Model relation ${pair.relation_type} · uncalibrated score: ${pair.model_score.toFixed(4)}` : `Model score unavailable: ${pair.model_status}`));
+        if (pair.explanation_url) { const link = element('a', 'Explain model score'); link.href = pair.explanation_url; card.append(link, element('span', ' · ')); }
         if (pair.graph_url) { const link = element('a', 'View recorded relationships'); link.href = pair.graph_url; card.append(link); }
         results.append(card);
       }

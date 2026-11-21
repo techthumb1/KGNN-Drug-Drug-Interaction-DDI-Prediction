@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Explain a BioKG model score</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#f5f7fa;color:#183044;font:16px/1.6 system-ui,sans-serif}main{max-width:1120px;margin:32px auto;padding:0 20px 40px}nav{display:flex;gap:20px;flex-wrap:wrap;margin-bottom:28px}a{color:#006b78}.card{background:white;border:1px solid #d5dfe6;border-radius:12px;padding:24px;margin:20px 0}label{display:block;font-weight:600}input,select,button{font:inherit;padding:10px;border:1px solid #9aadb9;border-radius:6px;max-width:100%}select{width:100%}button{background:#006b78;color:white;cursor:pointer}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.muted{color:#526675}h1,h2,p{margin-top:0}.score{font-size:2rem;font-weight:700}.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:12px;border-bottom:1px solid #d5dfe6}th{font-size:.9rem}.bar{height:8px;background:#007789;border-radius:4px;min-width:2px}.bar.negative{background:#994f2c}.error{color:#932626}.metrics{display:flex;gap:32px;flex-wrap:wrap}.metrics p{margin-bottom:8px}details{margin-top:18px}summary{cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:600px){.grid{grid-template-columns:1fr}.card{padding:16px}}
+  </style>
+</head>
+<body><main>
+<nav><a href="/">Medication list</a><a href="/batch">Batch prediction</a><a id="graph-link" href="/">Recorded relationships</a></nav>
+<p class="muted">MODEL TRANSPARENCY</p><h1>What makes up this model score?</h1>
+<p>The trained model compares two learned drug representations for a selected relation. This view shows the exact numerical contributions to its score, and the effect of removing one learned dimension while holding the others fixed.</p>
+<section class="card"><form id="explain-form">
+<div class="grid"><div><label for="first">Drug 1 BioKG index</label><input id="first" type="number" min="0" required></div><div><label for="second">Drug 2 BioKG index</label><input id="second" type="number" min="0" required></div></div>
+<p><label for="relation">Model relation</label><select id="relation" required>{% for relation in relations %}<option value="{{ relation.id }}">{{ relation.name }} (ID {{ relation.id }})</option>{% endfor %}</select></p>
+<button id="calculate">Explain score</button></form><p id="status" role="status" aria-live="polite"></p></section>
+<section id="result" class="card" hidden><h2 id="pair"></h2><p id="relation-name" class="muted"></p>
+<p>Uncalibrated model score</p><p id="score" class="score"></p>
+<div class="metrics"><div><strong>Logit before sigmoid</strong><p id="logit"></p></div><div><strong>Positive terms</strong><p id="positive"></p></div><div><strong>Negative terms</strong><p id="negative"></p></div></div>
+<p id="interpretation"></p><p><strong>How to read the table:</strong> positive terms raise the logit; negative terms lower it. “Score without term” removes that dimension's decoder contribution. These are learned numerical features, with no established disease or protein labels.</p>
+<div class="table-wrap"><table><thead><tr><th>Learned dimension</th><th>Signed logit contribution</th><th>Relative magnitude</th><th>Score without term</th><th>Score change</th></tr></thead><tbody id="terms"></tbody></table></div>
+<details><summary id="all-toggle">Show all dimensions</summary><div class="table-wrap"><table><thead><tr><th>Dimension</th><th>Logit term</th><th>Score without term</th></tr></thead><tbody id="all-terms"></tbody></table></div></details>
+<p id="limits" class="muted"></p><button id="download" type="button">Download explanation JSON</button></section>
+<p class="muted">Recorded source relationships can provide context. They do not, by themselves, identify what caused a prediction or establish drug safety.</p>
+</main><script>
+const params=new URLSearchParams(location.search), form=document.getElementById('explain-form'), status=document.getElementById('status');
+const first=document.getElementById('first'),second=document.getElementById('second'),relation=document.getElementById('relation');
+first.value=params.get('drug1_id')||'';second.value=params.get('drug2_id')||'';
+if(params.has('relation_type')) relation.value=params.get('relation_type');
+let explanation;
+function cell(row,value){const td=document.createElement('td');td.textContent=value;row.append(td);return td}
+async function load(event){
+ if(event)event.preventDefault();document.getElementById('calculate').disabled=true;status.textContent='Calculating exact model contributions…';status.className='';document.getElementById('result').hidden=true;
+ try{
+  const query=new URLSearchParams({drug1_id:first.value,drug2_id:second.value,relation_type:relation.value});
+  const response=await fetch('/explain?'+query),data=await response.json();if(!response.ok)throw new Error(data.error||'Explanation unavailable.');explanation=data;
+  document.getElementById('pair').textContent=data.drug1_name+' + '+data.drug2_name;
+  document.getElementById('relation-name').textContent=data.relation_name+' · relation ID '+data.relation_type;
+  for(const [id,value]of Object.entries({score:data.uncalibrated_model_score,logit:data.logit,positive:data.positive_logit_total,negative:data.negative_logit_total}))document.getElementById(id).textContent=value.toFixed(6);
+  document.getElementById('interpretation').textContent=data.interpretation;document.getElementById('limits').textContent=data.limitations;
+  document.getElementById('terms').replaceChildren();document.getElementById('all-terms').replaceChildren();
+  const max=Math.max(...data.contributions.map(x=>Math.abs(x.logit_contribution)),1e-12);
+  for(const [index,term]of data.contributions.entries()){
+   if(index<12){const row=document.createElement('tr');cell(row,term.dimension);cell(row,term.logit_contribution.toFixed(6));const bar=document.createElement('div');bar.className='bar'+(term.logit_contribution<0?' negative':'');bar.style.width=(100*Math.abs(term.logit_contribution)/max)+'%';cell(row,'').append(bar);cell(row,term.score_without_dimension.toFixed(6));cell(row,(term.score_change_when_removed>=0?'+':'')+term.score_change_when_removed.toFixed(6));document.getElementById('terms').append(row)}
+   const row=document.createElement('tr');cell(row,term.dimension);cell(row,term.logit_contribution.toFixed(6));cell(row,term.score_without_dimension.toFixed(6));document.getElementById('all-terms').append(row);
+  }
+  document.getElementById('all-toggle').textContent='Show all '+data.contributions.length+' dimensions';
+  document.getElementById('graph-link').href='/graph?'+new URLSearchParams({drug1_id:first.value,drug2_id:second.value,relation_type:relation.value});
+  document.getElementById('result').hidden=false;status.textContent='Showing the 12 largest absolute contributions; all dimensions are available below.';
+ }catch(error){status.textContent=error.message;status.className='error'}finally{document.getElementById('calculate').disabled=false}
+}
+form.addEventListener('submit',load);document.getElementById('download').addEventListener('click',()=>{if(!explanation)return;const url=URL.createObjectURL(new Blob([JSON.stringify(explanation,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='biokg-model-explanation.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
+if(first.value&&second.value&&relation.value)load();
+</script></body></html>

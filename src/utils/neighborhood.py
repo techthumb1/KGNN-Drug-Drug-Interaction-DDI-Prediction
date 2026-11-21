@@ -7,6 +7,7 @@ def source_neighborhood(
     first,
     second,
     limit=100,
+    entity_type="all",
 ):
     for value in (first, second):
         if (
@@ -25,6 +26,9 @@ def source_neighborhood(
             "edge limit between 1 and 100"
         )
 
+    if entity_type not in {"all", "drug", "protein", "disease", "sideeffect", "function"}:
+        raise ValueError("Unsupported entity type")
+
     nodes = {
         ("drug", first),
         ("drug", second),
@@ -37,6 +41,11 @@ def source_neighborhood(
         dst_type,
     ), edges in graph.edge_index_dict.items():
         if src_type != "drug" and dst_type != "drug":
+            continue
+
+        if entity_type != "all" and entity_type not in (src_type, dst_type):
+            continue
+        if entity_type == "drug" and (src_type != "drug" or dst_type != "drug"):
             continue
 
         mask = edges[0] < 0

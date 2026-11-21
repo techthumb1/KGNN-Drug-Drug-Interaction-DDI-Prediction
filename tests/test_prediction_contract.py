@@ -559,11 +559,10 @@ class RouteTests(unittest.TestCase):
                     400,
                 )
 
-    def test_every_legacy_explanation_endpoint_is_unavailable(self):
+    def test_graph_attribution_and_disabled_model_remain_unavailable(self):
         for path in (
             "/explain",
             "/explain_graph",
-            "/explain_view",
         ):
             response = self.client.get(
                 path
@@ -573,6 +572,8 @@ class RouteTests(unittest.TestCase):
             self.assertNotIn(
                 "shap_values", response.json
             )
+
+        self.assertEqual(self.client.get("/explain_view").status_code, 200)
 
         from src.explain.explain_ddi import run_explainer
         from src.explain.explain_shap import run_shap_explainer

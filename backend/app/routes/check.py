@@ -52,6 +52,7 @@ def register_check(app):
                     try:
                         row["model_score"] = runtime.predict_score(a, relation, b)
                         row["model_status"] = "ready"
+                        row["explanation_url"] = f"/explain_view?drug1_id={a}&drug2_id={b}&relation_type={relation}"
                     except runtime.PredictionUnavailable as error:
                         row["model_status"] = str(error)
             if first["biokg_index"] is not None and second["biokg_index"] is not None:

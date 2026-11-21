@@ -37,13 +37,22 @@ const {JSDOM} = require('jsdom');
     );
 
     w.eval(fs.readFileSync(d3path, 'utf8'));
-    w.d3.json = async () => structuredClone(data);
+    w.AbortController = AbortController;
+    w.fetch = async url => {
+      const result = structuredClone(data);
+      const type = new URL(url, 'http://localhost').searchParams.get('entity_type');
+      if (type && type !== 'all') {
+        result.nodes = result.nodes.filter(n => n.type === type || n.type === 'drug');
+        const ids = new Set(result.nodes.map(n => n.id));
+        result.links = result.links.filter(l => ids.has(l.source) && ids.has(l.target) &&
+          (type === 'drug' || result.nodes.some(n => n.type === type && (n.id === l.source || n.id === l.target))));
+      }
+      result.nodes = result.nodes.map(n => ({...n, identifier: n.id, annotation_status: 'resolved'}));
+      result.model_relations = [{id:'2', name:'Recorded fixture relation'}];
+      return {ok:true, json:async()=>result};
+    };
 
-    for (const script of w.document.querySelectorAll(
-      'script:not([src])'
-    )) {
-      w.eval(script.textContent);
-    }
+    w.eval(fs.readFileSync('backend/app/static/graph-explorer.js', 'utf8'));
 
     await new Promise(resolve => setTimeout(resolve, 30));
 
@@ -55,7 +64,7 @@ const {JSDOM} = require('jsdom');
     assert.deepEqual(counts(), [3, 2]);
     assert.match(
       w.document.getElementById('loading').textContent,
-      /truncated/
+      /Truncated/
     );
 
     const select = w.document.getElementById('nodeFilter');
@@ -68,6 +77,7 @@ const {JSDOM} = require('jsdom');
     ]) {
       select.value = type;
       select.dispatchEvent(new w.Event('change'));
+      await new Promise(resolve => setTimeout(resolve, 30));
       assert.deepEqual(counts(), expected);
     }
 
@@ -77,7 +87,7 @@ const {JSDOM} = require('jsdom');
 
     assert.match(
       w.document.getElementById('tooltip').textContent,
-      /ID: drug:0/
+      /BioKG entitydrug:0/
     );
 
     console.log(

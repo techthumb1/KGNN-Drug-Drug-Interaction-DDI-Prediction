@@ -51,7 +51,7 @@ def healthz():
             if runtime.prediction_error is None
             else "unavailable"
         ),
-        "explanations": "unavailable",
+        "explanations": "decoder_decomposition" if runtime.prediction_error is None else "unavailable",
     }, 200
 
 
