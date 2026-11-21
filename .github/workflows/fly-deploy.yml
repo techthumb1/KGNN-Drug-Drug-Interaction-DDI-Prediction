@@ -1,18 +1,43 @@
-# See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
-
 name: Fly Deploy
 on:
+  workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: fly-production
+  cancel-in-progress: false
 jobs:
   deploy:
     name: Deploy app
     runs-on: ubuntu-latest
-    concurrency: deploy-group    # optional: ensure only one action runs at a time
+    timeout-minutes: 25
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Inspect current runtime
+        run: |
+          flyctl status
+          flyctl logs --no-tail
+      - name: Ensure a private production session key
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! flyctl secrets list --json | python -c 'import json,sys; sys.exit(0 if any(item.get("Name", item.get("name")) == "FLASK_SECRET_KEY" for item in json.load(sys.stdin)) else 1)'; then
+            session_key="$(openssl rand -hex 32)"
+            echo "::add-mask::$session_key"
+            flyctl secrets set "FLASK_SECRET_KEY=$session_key" --stage
+          fi
+      - name: Deploy production app
+        run: flyctl deploy --remote-only --wait-timeout 15m
+      - name: Verify public readiness
+        run: curl --fail --show-error --retry 12 --retry-all-errors --retry-delay 10 --max-time 30 https://kgnn-drug-drug-interaction-ddi-prediction-falling-sunset-9369.fly.dev/healthz
+      - name: Capture runtime diagnostics
+        if: always()
+        run: |
+          flyctl status
+          flyctl checks list
+          flyctl logs --no-tail
