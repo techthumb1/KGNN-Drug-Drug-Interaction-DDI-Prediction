@@ -28,7 +28,8 @@ def register_index(app):
         catalog = get_catalog(runtime.entity_mappings.get("drug", {}))
         query = request.args.get("q", "")[:160]
         return jsonify({"drugs": catalog.search(query),
-                        "named_drugs": sum(bool(row["drugbank_id"]) for row in catalog.entries.values())})
+                        "name_vocabulary_status": catalog.name_vocabulary_status,
+                        "named_drugs": len(catalog.entries)})
 
     @app.get("/relations")
     def get_relation_types():

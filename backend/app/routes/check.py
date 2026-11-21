@@ -19,7 +19,7 @@ def register_check(app):
         catalog = get_catalog(runtime.entity_mappings.get("drug", {}))
         try:
             drugs = [catalog.resolve(value) for value in values]
-            identities = [row["pubchem_cid"] or row["key"] for row in drugs]
+            identities = [row["pubchem_cid"] or row["drugbank_id"] or row["key"] for row in drugs]
             if len(set(identities)) != len(identities):
                 raise ValueError("Choose distinct drugs; duplicate identifiers for the same compound were found.")
             relation = data.get("relation_type", "")

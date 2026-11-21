@@ -26,7 +26,7 @@ The legacy `/explain`, `/explain_graph` and `/explain_view` endpoints return HTT
 
 The application uses the official **OGB `ogbl-biokg`** dataset. It constructs the source graph and model message-passing graph from the **official training split only**. Validation and test edges are not added to that graph, and synthetic reverse edges are not displayed as recorded relationships.
 
-The homepage accepts drug names, DrugBank IDs and prefixed PubChem CIDs through a searchable medication list. Names and IDs resolve against the supplied DrugBank export and BioKG mappings. Local BioKG indices remain available in the expandable index mode. DrugBank IDs identify DrugBank records; PubChem CIDs identify chemical compounds. They are distinct from local model indices. Model relations come from `/relations`.
+The homepage accepts drug names, DrugBank IDs and prefixed PubChem CIDs through a searchable medication list. Names and IDs resolve against the supplied DrugBank export, the locally cached NLM RxTerms medication vocabulary and BioKG mappings. Local BioKG indices remain available in the expandable index mode. DrugBank IDs identify DrugBank records; PubChem CIDs identify chemical compounds. They are distinct from local model indices. Model relations come from `/relations`.
 
 The graph view returns incident relationships for either selected drug. It does not imply that the two drugs share a direct edge or cause an adverse interaction.
 
@@ -56,12 +56,14 @@ The prepared JSON already contains the extended lookup; there is no need to repa
 
 ### Check a medication list by name
 
-1. Search a canonical name, DrugBank ID (for example `DB00641`) or PubChem CID (for example `CID239`) and select the intended entry from the suggestions. Duplicate aliases for the same compound are rejected.
+1. Search a generic or brand name (optionally including strength or dosage form), DrugBank ID (for example `DB00641`) or PubChem CID (for example `CID239`) and select the intended entry from the suggestions. Duplicate aliases for the same compound are rejected.
 2. Add 2–10 drugs. **Check selected pairs** reviews all unique unordered pairs, up to 45. This recorded-data lookup works without model weights when the DrugBank export is available.
 3. Results distinguish a recorded DrugBank interaction, no unambiguous entry found in this export, and unavailable source coverage. An entry not found is not a safety determination. The existing JSON stores partner names rather than partner IDs, so only unambiguous exact-name matches are reported.
 4. Expand **Optional model comparison** to also score a chosen BioKG relation for supported pairs. Drugs outside the trained graph keep their recorded lookup results and receive no fabricated model score. The selected relation does not classify interaction severity.
 
-Drug-name searches and pair checks stay on the app server; they do not query external drug services for each keystroke. Names absent from the supplied export retain their recorded identifiers. Full descriptions remain server-side rather than being truncated into session cookies.
+Drug-name searches and pair checks stay on the app server; they do not query external drug services for each keystroke. The first name search (or `python prepare_runtime.py`) automatically downloads the public [NLM RxTerms](https://www.lhncbc.nlm.nih.gov/MOR/RxTerms/) vocabulary into the ignored `backend/drugbank_data/rxterms.zip` cache. Release 202611 is pinned for reproducibility; set `RXTERMS_URL` to a trusted newer NLM release and remove this cache to refresh it. No new dependencies or credentials are required. The vocabulary adds U.S. brand names, generic products, synonyms, strengths and dosage forms; it is not a worldwide or exhaustive drug catalog. If the download is unavailable, the picker explicitly reports limited DrugBank-only search coverage.
+
+Single-ingredient products use an exact, unambiguous match to a canonical DrugBank ingredient for recorded lookup and optional model scoring. Product results explicitly identify this as ingredient-level coverage; dosage and formulation are not evaluated. Combination products and unmatched ingredients remain searchable and selectable but receive an explicit unavailable result, with no partial ingredient substitution or invented model scores. Name recognition, recorded-interaction coverage and model coverage are separate. Full descriptions remain server-side rather than being truncated into session cookies.
 
 ### Recorded relationships
 
@@ -228,7 +230,7 @@ After deployment, verify the homepage, graph generation and health response. Wit
 | --- | --- |
 | `GET /` | Research form and prediction-availability notice |
 | `GET /relations` | Supported drug-drug relation IDs |
-| `GET /drugs/search?q=...` | Search loaded names, DrugBank IDs and prefixed CIDs |
+| `GET /drugs/search?q=...` | Search generic/brand product names, synonyms, strengths, DrugBank IDs and prefixed CIDs; report vocabulary availability |
 | `POST /check` | Check 2–10 drugs against recorded DrugBank entries, with optional model comparison |
 | `GET /graph?drug1_id=58&drug2_id=89` | Recorded relationship viewer |
 | `GET /graph_data?drug1_id=58&drug2_id=89` | Bounded recorded neighborhood; invalid inputs return 400 |

@@ -29,8 +29,13 @@ def main():
         load_checkpoint(MODEL_CHECKPOINT, contract, "cpu")
     from src.utils import drugbank_lookup, drugbank_full_lookup
 
+    from src.utils.drug_catalog import get_catalog
+    catalog = get_catalog(mappings["drug"])
+
     print(json.dumps({
         "graph": "ready",
+        "medication_names": catalog.name_vocabulary_status,
+        "searchable_entries": len(catalog.entries),
         "train_graph_sha256": contract["train_graph_sha256"],
         "drugbank_links": len(drugbank_lookup.cid_to_drugbank),
         "drugbank_details": len(drugbank_full_lookup.cid_to_entry),

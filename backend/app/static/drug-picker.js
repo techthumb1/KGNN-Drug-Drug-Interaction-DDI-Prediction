@@ -16,7 +16,7 @@
   }
   function identifiers(drug) {
     return [drug.drugbank_id, drug.pubchem_cid ? `PubChem CID ${drug.pubchem_cid}` : null,
-      drug.biokg_index !== null ? `BioKG index ${drug.biokg_index}` : null].filter(Boolean).join(' · ');
+      drug.biokg_index != null ? `BioKG index ${drug.biokg_index}` : null, drug.rxcui ? `RxNorm ${drug.rxcui}` : null].filter(Boolean).join(' · ');
   }
   function closeSuggestions() {
     suggestions.hidden = true;
@@ -33,7 +33,7 @@
     selected.replaceChildren();
     for (const drug of drugs) {
       const row = element('li');
-      row.append(element('strong', drug.name), element('small', identifiers(drug)));
+      row.append(element('strong', drug.name), element('small', identifiers(drug)), ...(drug.coverage_note ? [element('small', drug.coverage_note)] : []));
       const remove = element('button', 'Remove');
       remove.type = 'button';
       remove.setAttribute('aria-label', `Remove ${drug.name}`);
@@ -47,11 +47,12 @@
     button.disabled = checking || drugs.length < 2;
     query.disabled = checking || drugs.length >= 10;
     document.getElementById('list-relation').disabled = checking;
-    button.textContent = checking ? 'Checking pairs…' : `Check ${drugs.length * (drugs.length - 1) / 2} selected pairs`;
+    const count = drugs.length * (drugs.length - 1) / 2;
+    button.textContent = checking ? 'Checking pairs…' : `Check ${count} selected ${count === 1 ? 'pair' : 'pairs'}`;
   }
   function add(drug) {
     if (checking) return;
-    if (drugs.some(item => item.key === drug.key || (item.pubchem_cid && item.pubchem_cid === drug.pubchem_cid))) {
+    if (drugs.some(item => item.key === drug.key || (item.pubchem_cid && item.pubchem_cid === drug.pubchem_cid) || (item.drugbank_id && item.drugbank_id === drug.drugbank_id))) {
       searchStatus.textContent = 'That drug is already selected.';
       return;
     }
@@ -69,10 +70,10 @@
   }
   query.addEventListener('input', () => {
     clearTimeout(timer); request?.abort(); const current = ++sequence;
-    if (query.value.trim().length < 2) { closeSuggestions(); return; }
+    if (query.value.trim().length < 2) { closeSuggestions(); searchStatus.textContent = ''; return; }
     timer = setTimeout(async () => {
       request = new AbortController();
-      searchStatus.textContent = 'Searching supplied drug records…';
+      searchStatus.textContent = 'Searching medication names…';
       try {
         const response = await fetch('/drugs/search?' + new URLSearchParams({q: query.value.trim()}), {signal: request.signal});
         if (!response.ok) throw new Error('Drug search is unavailable.');
@@ -83,13 +84,14 @@
           const row = element('li'); row.setAttribute('role', 'presentation');
           const choice = element('button'); choice.type = 'button'; choice.id = `drug-option-${index}`;
           choice.setAttribute('role', 'option'); choice.setAttribute('aria-selected', 'false');
-          choice.append(element('strong', drug.name), element('small', identifiers(drug)));
+          choice.append(element('strong', drug.name), element('small', identifiers(drug)), ...(drug.coverage_note ? [element('small', drug.coverage_note)] : []));
           choice.addEventListener('click', () => add(drug)); row.append(choice); suggestions.append(row);
         });
         suggestions.hidden = !matches.length;
         query.setAttribute('aria-expanded', String(Boolean(matches.length)));
         searchStatus.textContent = matches.length ? `${matches.length} matching entries. Select one to add it.` :
-          'No matching name or identifier in the loaded records. Try a canonical name, DrugBank ID or CID.';
+          'No matching medication in the loaded vocabulary. Try its generic name or check the spelling. Coverage is not universal.';
+        if (body.name_vocabulary_status === 'unavailable') searchStatus.textContent += ' Expanded NLM names are unavailable; only loaded DrugBank names are searchable.';
       } catch (error) {
         if (error.name !== 'AbortError') { closeSuggestions(); searchStatus.textContent = error.message; }
       }
@@ -116,11 +118,14 @@
         body: JSON.stringify({drugs: drugs.map(drug => drug.key), relation_type: document.getElementById('list-relation').value})});
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Pair check failed.');
-      results.replaceChildren(element('h2', `${body.pairs.length} pair results`), element('p', body.note, 'source-note'));
+      results.replaceChildren(element('h2', `${body.pairs.length} pair ${body.pairs.length === 1 ? 'result' : 'results'}`), element('p', body.note, 'source-note'));
       for (const pair of body.pairs) {
         const card = element('article', undefined, 'card');
         card.append(element('h3', `${pair.drug1.name} + ${pair.drug2.name}`));
         card.append(element('p', `${identifiers(pair.drug1)} / ${identifiers(pair.drug2)}`, 'muted'));
+        for (const drug of [pair.drug1, pair.drug2]) {
+          if (drug.coverage_note) card.append(element('p', `${drug.name}: ${drug.coverage_note}`, 'muted'));
+        }
         card.append(element('p', pair.recorded_status === 'recorded' ? 'Recorded DrugBank interaction' :
           pair.recorded_status === 'not_found' ? 'No unambiguous entry found in the supplied DrugBank export' :
           'Recorded DrugBank lookup unavailable for this pair', 'pair-source'));
@@ -131,7 +136,7 @@
         results.append(card);
       }
       results.append(element('p', body.source, 'muted')); results.hidden = false;
-      status.textContent = `Checked ${body.pairs.length} unique pairs from ${body.drugs.length} drugs.`;
+      status.textContent = `Checked ${body.pairs.length} unique ${body.pairs.length === 1 ? 'pair' : 'pairs'} from ${body.drugs.length} drugs.`;
     } catch (error) { status.textContent = error.message; }
     finally { checking = false; renderSelected(); }
   });

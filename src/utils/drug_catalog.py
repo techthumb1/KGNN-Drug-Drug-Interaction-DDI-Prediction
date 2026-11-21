@@ -6,6 +6,7 @@ import re
 import unicodedata
 
 from src.utils import drugbank_full_lookup as metadata
+from src.utils.medication_names import load_products, search_text
 
 
 def normalized(value):
@@ -44,6 +45,23 @@ class DrugCatalog:
                 self._add(row)
                 self.by_index[index] = row
 
+        products, self.name_vocabulary_status = load_products()
+        self.search_terms = {key: search_text(row["name"]) for key, row in self.entries.items()}
+        canonical_names = {name: tuple(rows) for name, rows in self.by_name.items()}
+        for rxcui, name, ingredients, terms in products:
+            # Only one exact, unambiguous ingredient can inherit an existing entity.
+            # Never reduce a combination product to just one of its ingredients.
+            candidates = canonical_names.get(normalized(ingredients[0]), []) if len(ingredients) == 1 else []
+            match = candidates[0] if len(candidates) == 1 else {}
+            row = {"key": f"rxterms:{rxcui}", "name": name, "rxcui": rxcui,
+                   "ingredients": ingredients, "drugbank_id": match.get("drugbank_id"),
+                   "pubchem_cid": match.get("pubchem_cid"), "biokg_index": match.get("biokg_index"),
+                   "coverage_note": ("Ingredient-level lookup: " + match["name"] + ". Dose and formulation are not evaluated.") if match else
+                       "Name recognized by NLM RxTerms; interaction lookup and model coverage are unavailable for this product."}
+            self.entries[row["key"]] = row
+            self.search_terms[row["key"]] = terms
+            self.by_name[normalized(name)].append(row)
+
     def _add(self, row):
         self.entries[row["key"]] = row
         self.by_name[normalized(row["name"])].append(row)
@@ -56,6 +74,8 @@ class DrugCatalog:
         if isinstance(value, bool) or not isinstance(value, (str, int)):
             raise ValueError("Choose a drug name or a supported identifier.")
         text = str(value).strip()
+        if text in self.entries:
+            return self.entries[text]
         if text.upper() in self.entries:
             return self.entries[text.upper()]
         if text.lower().startswith("biokg:"):
@@ -80,17 +100,20 @@ class DrugCatalog:
         cid_match = re.fullmatch(r"(?:cid:?|pubchem:)0*(\d+)", query)
         if cid_match:
             return self.by_cid.get(str(int(cid_match[1])), [])[:limit]
+        words = search_text(query).split()
         matches = []
         for row in self.entries.values():
-            name = normalized(row["name"])
+            terms = self.search_terms[row["key"]]
             identifiers = (row["drugbank_id"] or "").casefold(), ("cid" + row["pubchem_cid"]) if row["pubchem_cid"] else ""
-            if query in name or any(query in value for value in identifiers):
+            if (words and all(any(token.startswith(word) for token in terms.split()) for word in words)) or any(query in value for value in identifiers):
                 matches.append(row)
         matches.sort(key=lambda row: (query not in (normalized(row["name"]),
                                                       (row["drugbank_id"] or "").casefold(),
                                                       "cid" + (row["pubchem_cid"] or "")),
+                                     len(row.get("ingredients", [])) > 1,
                                      not normalized(row["name"]).startswith(query),
-                                     row["biokg_index"] is None, normalized(row["name"]), row["key"]))
+                                     not search_text(row["name"]).startswith(words[0] if words else query),
+                                     bool(row.get("rxcui")), normalized(row["name"]), row["key"]))
         return matches[:limit]
 
 
@@ -111,8 +134,8 @@ def recorded_interactions(drugs):
     path = Path(metadata.DRUGBANK_JSON)
     if not path.is_file():
         return [], False
-    chosen = tuple(sorted((d["drugbank_id"], normalized(d["name"]))
-                          for d in drugs if d["drugbank_id"]))
+    chosen = tuple(sorted({(d["drugbank_id"], normalized(metadata.drugbank_entries[d["drugbank_id"]]["name"]))
+                           for d in drugs if d["drugbank_id"] in metadata.drugbank_entries}))
     stat = path.stat()
     return list(_recorded_matches(str(path), stat.st_mtime_ns, stat.st_size, chosen)), True
 
