@@ -215,7 +215,9 @@
 
     function describe(node) {
       document.getElementById('tooltip').textContent =
-        `${node.label} | ID: ${node.id} | Type: ${node.type}`;
+        `${node.label} | ID: ${node.id} | Type: ${node.type}` +
+        (node.identifier ? ` | Source identifier: ${node.identifier}` : '') +
+        (node.drugbank_id ? ` | DrugBank: ${node.drugbank_id}` : '');
     }
 
     function renderGraph(sourceNodes, sourceLinks) {
@@ -305,22 +307,31 @@
       node.append('title')
         .text(item => `${item.label} (${item.id})`);
 
+      function labelLines(value) {
+        const lines = [];
+        let current = '';
+        for (let word of value.split(/\s+/)) {
+          if (current && (current + ' ' + word).length > 22) { lines.push(current); current = ''; }
+          while (word.length > 22) { lines.push(word.slice(0, 22)); word = word.slice(22); }
+          current += (current ? ' ' : '') + word;
+        }
+        if (current) lines.push(current);
+        return lines;
+      }
       const labels = svg.append('g')
-        .selectAll('text')
-        .data(nodes)
-        .join('text')
-        .attr('class', 'nodelabel')
-        .attr('text-anchor', 'middle')
-        .text(item =>
-          item.label.length > 24
-            ? item.label.slice(0, 24) + '…'
-            : item.label
-        );
+        .selectAll('text').data(nodes).join('text')
+        .attr('class', 'nodelabel').attr('text-anchor', 'middle');
+      labels.each(function(item) {
+        item.labelLines = labelLines(item.label);
+        d3.select(this).selectAll('tspan').data(item.labelLines).join('tspan')
+          .attr('x', 0).attr('dy', (line, index) => index ? 14 : 0).text(line => line);
+      });
 
       simulation.on('tick', () => {
         for (const item of nodes) {
-          item.x = Math.max(30, Math.min(width - 30, item.x));
-          item.y = Math.max(30, Math.min(height - 30, item.y));
+          item.x = Math.max(90, Math.min(width - 90, item.x));
+          const top = 28 + Math.min(height - 70, (item.labelLines || []).length * 14);
+          item.y = Math.max(top, Math.min(height - 30, item.y));
         }
 
         link
@@ -334,8 +345,7 @@
           .attr('cy', item => item.y);
 
         labels
-          .attr('x', item => item.x)
-          .attr('y', item => item.y - 14);
+          .attr('transform', item => `translate(${item.x},${item.y - 14 - (item.labelLines.length - 1) * 14})`);
       });
 
       const summary =
@@ -348,6 +358,7 @@
             ? ' The returned neighborhood is truncated at 100 edges.'
             : ''
         ) +
+        (filter.value !== 'all' ? ' Selected drug anchors remain visible with the chosen entity type.' : '') +
         (
           !allLinks.length
             ? ' No incident relationships were returned for the selected drugs.'
@@ -359,14 +370,18 @@
       const nodes =
         filter.value === 'all'
           ? allNodes
-          : allNodes.filter(node => node.type === filter.value);
+          : allNodes.filter(node => node.type === filter.value ||
+              node.id === `drug:${first}` || node.id === `drug:${second}`);
 
       const ids = new Set(nodes.map(node => node.id));
 
       renderGraph(
         nodes,
         allLinks.filter(link =>
-          ids.has(link.source) && ids.has(link.target)
+          ids.has(link.source) && ids.has(link.target) &&
+          (filter.value === 'all' || filter.value === 'drug' ||
+           allNodes.some(node => node.type === filter.value &&
+             (node.id === link.source || node.id === link.target)))
         )
       );
     });
@@ -412,6 +427,10 @@
           label: String(node.label ?? node.id)
         }));
 
+        if (Array.isArray(data.selected_drugs)) {
+          document.getElementById('pair-label').textContent = 'Selected drugs: ' +
+            data.selected_drugs.map(drug => `${drug.name} (BioKG index ${drug.biokg_index})`).join(' and ');
+        }
         allLinks = data.links.map(link => ({ ...link }));
         truncated = Boolean(data.truncated);
         filter.disabled = false;

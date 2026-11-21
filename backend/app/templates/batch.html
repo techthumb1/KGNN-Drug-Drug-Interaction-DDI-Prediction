@@ -116,7 +116,7 @@
 
     <h1>Batch prediction</h1>
     <p>
-      Submit local BioKG drug indices and recorded relation IDs.
+      Submit local BioKG indices, or drug names and identifiers that resolve to the model graph, with a recorded relation ID.
       Results contain uncalibrated model scores, not clinical probabilities.
     </p>
 
@@ -156,7 +156,7 @@
 58,89,2</code></pre>
 
       <ul>
-        <li>Include the three headers exactly as shown.</li>
+        <li>For indices, use the headers shown above. For names, DrugBank IDs or PubChem CIDs, use <code>drug1,drug2,relation_type</code>.</li>
         <li>
           Use nonnegative integer local drug indices and distinct drugs
           in each row.
@@ -166,7 +166,9 @@
           <a href="/">homepage dropdown</a>.
         </li>
         <li>
-          DrugBank IDs and PubChem CIDs are not accepted as local indices.
+          DrugBank IDs identify DrugBank records; PubChem CIDs identify compounds.
+          Use them in the <code>drug1</code>/<code>drug2</code> columns.
+          Drugs outside the model graph receive an error, with no model score.
         </li>
       </ul>
 

@@ -7,6 +7,7 @@ from src.utils.paths import DRUGBANK_DATA_DIR
 DRUGBANK_JSON = DRUGBANK_DATA_DIR / "drugbank_slim.json"
 DISPLAY_FIELDS = ("pubchem", "drugbank_id", "name", "cas", "type", "description", "targets")
 cid_to_entry = {}
+drugbank_entries = {}
 
 
 def iter_records(path):
@@ -56,13 +57,17 @@ def iter_records(path):
 
 
 def load_full_drugbank():
-    global cid_to_entry
+    global cid_to_entry, drugbank_entries
     cid_to_entry = {}
+    drugbank_entries = {}
     if not Path(DRUGBANK_JSON).is_file():
         print(f"[DrugBank Full] File not found: {DRUGBANK_JSON}")
         return 0
     loaded = {}
     for entry in iter_records(DRUGBANK_JSON):
+        display = {key: entry[key] for key in DISPLAY_FIELDS if key in entry}
+        if entry.get("drugbank_id") and entry.get("name"):
+            drugbank_entries[str(entry["drugbank_id"]).upper()] = display
         value = entry.get("pubchem")
         if value is None or value == "":
             continue
@@ -70,7 +75,7 @@ def load_full_drugbank():
         if not cid.isascii() or not cid.isdecimal() or int(cid) < 1:
             raise ValueError("DrugBank PubChem CID must be a positive integer")
         cid = str(int(cid))
-        loaded[cid] = {key: entry[key] for key in DISPLAY_FIELDS if key in entry}
+        loaded[cid] = display
         loaded[cid]["pubchem"] = cid
     if not loaded:
         raise ValueError("DrugBank JSON has no usable PubChem CID mappings")

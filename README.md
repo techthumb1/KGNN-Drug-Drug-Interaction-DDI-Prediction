@@ -26,7 +26,7 @@ The legacy `/explain`, `/explain_graph` and `/explain_view` endpoints return HTT
 
 The application uses the official **OGB `ogbl-biokg`** dataset. It constructs the source graph and model message-passing graph from the **official training split only**. Validation and test edges are not added to that graph, and synthetic reverse edges are not displayed as recorded relationships.
 
-Inputs are **local BioKG drug indices**, not DrugBank identifiers or PubChem CIDs. Available drug-drug relation IDs come from `/relations` and are shown in the homepage dropdown.
+The homepage accepts drug names, DrugBank IDs and prefixed PubChem CIDs through a searchable medication list. Names and IDs resolve against the supplied DrugBank export and BioKG mappings. Local BioKG indices remain available in the expandable index mode. DrugBank IDs identify DrugBank records; PubChem CIDs identify chemical compounds. They are distinct from local model indices. Model relations come from `/relations`.
 
 The graph view returns incident relationships for either selected drug. It does not imply that the two drugs share a direct edge or cause an adverse interaction.
 
@@ -35,11 +35,11 @@ BioKG and DrugBank serve different purposes in this application:
 | Source | Current role |
 | --- | --- |
 | OGB BioKG | Recorded heterogeneous training graph and the benchmark splits used to train/evaluate the R-GCN |
-| DrugBank | Lookup of drug names, DrugBank IDs, CAS numbers, descriptions and targets for matching PubChem CIDs |
+| DrugBank | Searchable drug names/identifiers, descriptions and targets, plus recorded interaction descriptions for selected drug pairs |
 
-DrugBank integration remains in `src/utils/drugbank_lookup.py`, `src/utils/drugbank_full_lookup.py`, `src/utils/parse_drugbank_xml.py` and the prediction result page. Your DrugBank records are not added to the current training graph, and their interaction descriptions do not determine model scores. The initial graph-only verification had no local DrugBank cache. A subsequent run downloaded the existing prepared JSON from Google Drive, loaded 8,724 records with PubChem IDs and matched 1,328 BioKG drugs. Single prediction responses included real DrugBank metadata. Your existing Drive files remain the source when their URLs are configured.
+DrugBank integration remains in `src/utils/drugbank_lookup.py`, `src/utils/drugbank_full_lookup.py`, `src/utils/parse_drugbank_xml.py` and the prediction result page. DrugBank records are not added to the current training graph. The medication-list checker shows recorded interaction descriptions separately from optional model scores; those descriptions do not determine the scores. The initial graph-only verification had no local DrugBank cache. A subsequent run downloaded the existing prepared JSON from Google Drive, loaded 8,724 records with PubChem IDs and matched 1,328 BioKG drugs. Single prediction responses included real DrugBank metadata. Your existing Drive files remain the source when their URLs are configured.
 
-For your existing Google Drive files, set `DRUGBANK_JSON_URL` to the file's existing Drive share/download URL in your private `.env` (local) or host environment settings (production). With predictions enabled, startup downloads the JSON once and reuses its cached copy on later starts. Drive remains the source; you do not need to move or re-upload the file. Standard Drive file-view URLs are accepted. The standalone app needs the URL to permit its download; ChatGPT's signed-in Drive connection is separate from the app's downloader.
+For your existing Google Drive files, set `DRUGBANK_JSON_URL` to the file's existing Drive share/download URL in your private `.env` (local) or host environment settings (production). When the URL is configured, startup downloads the JSON once and reuses its cached copy on later starts. Drive remains the source; you do not need to move or re-upload the file. Standard Drive file-view URLs are accepted. The standalone app needs the URL to permit its download; ChatGPT's signed-in Drive connection is separate from the app's downloader.
 
 The configured JSON is read one record at a time, retaining only the display fields used by the application. Its large interaction arrays are not held in the lookup cache. When the prepared JSON is present, the full XML source is not downloaded again.
 
@@ -48,11 +48,20 @@ These are automatic local cache paths, not instructions to manually relocate you
 - `backend/drugbank_data/drugbank_all_drug_links.csv` for the basic CID/name/DrugBank ID lookup.
 - `backend/drugbank_data/drugbank_slim.json` for the extended description/target lookup.
 
-The JSON records must use the schema produced by the existing XML parser (`pubchem`, `drugbank_id`, `name`, `cas`, `type`, `description`, `targets`, `interactions`). The CSV requires `PubChem Compound ID`, `DrugBank ID`, `Name`, `CAS Number` and `Drug Type` columns. A metadata card appears after a successful prediction when the BioKG PubChem CID matches a supplied record; it is not shown merely because DrugBank files exist. Restart the app after changing metadata files. Missing records produce no substituted metadata.
+The JSON records must use the schema produced by the existing XML parser (`pubchem`, `drugbank_id`, `name`, `cas`, `type`, `description`, `targets`, `interactions`). The CSV requires `PubChem Compound ID`, `DrugBank ID`, `Name`, `CAS Number` and `Drug Type` columns. The name picker searches all named DrugBank records, including drugs outside the trained model graph. Prediction metadata cards show complete descriptions and target lists for matched records. Graph drug labels use available names, with source identifiers retained in the entity inspector. Restart the app after changing metadata files. Missing records produce no substituted metadata.
 
 The prepared JSON already contains the extended lookup; there is no need to reparse your XML when using it. If you have only an XML export, from the repository root run `python -m src.utils.parse_drugbank_xml /path/to/your-drugbank.xml` after creating `backend/drugbank_data/`. The existing parser creates the JSON lookup; it does not create the CSV. XML download alone does not load enrichment, and XML conversion is not run automatically. Existing supplied CSV/JSON files need no conversion.
 
 ## Application usage
+
+### Check a medication list by name
+
+1. Search a canonical name, DrugBank ID (for example `DB00641`) or PubChem CID (for example `CID239`) and select the intended entry from the suggestions. Duplicate aliases for the same compound are rejected.
+2. Add 2–10 drugs. **Check selected pairs** reviews all unique unordered pairs, up to 45. This recorded-data lookup works without model weights when the DrugBank export is available.
+3. Results distinguish a recorded DrugBank interaction, no unambiguous entry found in this export, and unavailable source coverage. An entry not found is not a safety determination. The existing JSON stores partner names rather than partner IDs, so only unambiguous exact-name matches are reported.
+4. Expand **Optional model comparison** to also score a chosen BioKG relation for supported pairs. Drugs outside the trained graph keep their recorded lookup results and receive no fabricated model score. The selected relation does not classify interaction severity.
+
+Drug-name searches and pair checks stay on the app server; they do not query external drug services for each keystroke. Names absent from the supplied export retain their recorded identifiers. Full descriptions remain server-side rather than being truncated into session cookies.
 
 ### Recorded relationships
 
@@ -84,6 +93,8 @@ drug1_id,drug2_id,relation_type
 The upload field is `csv_file`. The output includes `uncalibrated_model_score` and `error`. Invalid rows receive an error and no score. The page provides a result download when scoring succeeds and an error message when the request fails.
 
 Corrected prediction history uses `predictions_v2_log.csv`, keeping it separate from legacy score logs. Render's ephemeral filesystem does not provide durable log storage across deployments.
+
+Named batch files can use `drug1,drug2,relation_type` columns with canonical names, DrugBank IDs or prefixed CIDs. Existing `drug1_id,drug2_id,relation_type` files retain strict local-index behavior. Output adds resolved drug names; unsupported model entities receive an error without a score. Graph entity filters keep the selected drug anchors and their relevant edges visible, and graph labels wrap rather than being silently shortened.
 
 ## Model and checkpoint compatibility
 
@@ -217,6 +228,8 @@ After deployment, verify the homepage, graph generation and health response. Wit
 | --- | --- |
 | `GET /` | Research form and prediction-availability notice |
 | `GET /relations` | Supported drug-drug relation IDs |
+| `GET /drugs/search?q=...` | Search loaded names, DrugBank IDs and prefixed CIDs |
+| `POST /check` | Check 2–10 drugs against recorded DrugBank entries, with optional model comparison |
 | `GET /graph?drug1_id=58&drug2_id=89` | Recorded relationship viewer |
 | `GET /graph_data?drug1_id=58&drug2_id=89` | Bounded recorded neighborhood; invalid inputs return 400 |
 | `POST /predict` | Corrected score, 400 for invalid input, or 503 when unavailable |

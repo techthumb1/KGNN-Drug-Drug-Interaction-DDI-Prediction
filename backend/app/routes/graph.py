@@ -8,6 +8,7 @@ from flask import (
 
 from src.utils.model import graph, entity_mappings
 from src.utils.neighborhood import source_neighborhood
+from src.utils.drug_catalog import get_catalog
 
 
 def register_graph_routes(app):
@@ -17,14 +18,17 @@ def register_graph_routes(app):
             first = int(request.args["drug1_id"])
             second = int(request.args["drug2_id"])
 
-            return jsonify(
-                source_neighborhood(
-                    graph,
-                    entity_mappings,
-                    first,
-                    second,
-                )
-            )
+            data = source_neighborhood(graph, entity_mappings, first, second)
+            catalog = get_catalog(entity_mappings.get("drug", {}))
+            for node in data["nodes"]:
+                if node["type"] == "drug":
+                    drug = catalog.by_index.get(node["local_index"])
+                    if drug:
+                        node["identifier"] = node["label"]
+                        node["label"] = drug["name"]
+                        node["drugbank_id"] = drug["drugbank_id"]
+            data["selected_drugs"] = [catalog.by_index.get(i, {"name": f"drug:{i}"}) for i in (first, second)]
+            return jsonify(data)
         except (
             KeyError,
             TypeError,

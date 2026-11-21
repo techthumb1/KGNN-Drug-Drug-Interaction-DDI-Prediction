@@ -152,6 +152,25 @@
         padding: 18px;
       }
     }
+
+    .grid > *, .field { min-width: 0; }
+    main { max-width: 1060px; }
+    p, h2, h3, li, summary { overflow-wrap: anywhere; }
+    select { min-height: 48px; line-height: 1.4; }
+    summary { cursor: pointer; margin-bottom: 14px; }
+    .description { white-space: pre-line; overflow-wrap: anywhere; }
+    .search-field { position: relative; }
+    .suggestions { list-style: none; padding: 6px; margin: 6px 0; border: 1px solid #9aadb9; border-radius: 8px; background: white; max-height: 340px; overflow-y: auto; }
+    .suggestions button { width: 100%; text-align: left; color: #183044; background: white; border: 0; white-space: normal; }
+    .suggestions button:hover, .suggestions button.active { background: #e5f2f3; }
+    .suggestions small { display: block; color: #526675; }
+    .selected-drugs { list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; padding: 0; }
+    .selected-drugs li { background: #eef6f6; padding: 14px; border-radius: 8px; min-width: 0; }
+    .selected-drugs small { display: block; margin: 4px 0 10px; }
+    .selected-drugs button { padding: 4px 10px; font-size: .85rem; background: white; color: #006b78; }
+    .research-options { border-top: 1px solid #d5dfe6; padding-top: 16px; margin: 22px 0; }
+    .pair-source { font-weight: 600; color: #006b78; }
+    .source-note { border-left: 3px solid #d39a28; padding: 10px 14px; background: #fff8e9; }
   </style>
 </head>
 
@@ -163,7 +182,7 @@
     </nav>
 
     <p class="eyebrow">BIOMEDICAL KNOWLEDGE GRAPH RESEARCH</p>
-    <h1>BioKG Research Demo</h1>
+    <h1>Drug interaction research</h1>
     <p>
       Explore recorded biomedical relationships and experimental link prediction.
       This demo does not establish drug safety or provide clinical advice.
@@ -191,10 +210,35 @@
     <p class="error" role="alert">{{ error }}</p>
     {% endif %}
 
-    <section class="card">
-      <h2>Select two drugs</h2>
+    <section class="card" aria-labelledby="medication-heading">
+      <p class="eyebrow">MEDICATION LIST</p>
+      <h2 id="medication-heading">Find drugs by name</h2>
+      <p>Add 2–10 drugs to review every unique pair. Search names, DrugBank IDs or PubChem CIDs.</p>
+      <div class="field search-field">
+        <label for="drug-query">Drug name or identifier</label>
+        <input id="drug-query" type="search" placeholder="Start typing a drug name, such as simvastatin"
+          role="combobox" aria-autocomplete="list" aria-controls="drug-suggestions" aria-expanded="false" autocomplete="off">
+        <ul id="drug-suggestions" class="suggestions" role="listbox" aria-label="Matching drugs" hidden></ul>
+        <p id="search-status" class="muted" role="status" aria-live="polite">Names come from your supplied DrugBank export. Only supported matches receive model scores.</p>
+      </div>
+      <ul id="selected-drugs" class="selected-drugs" aria-label="Selected drugs"></ul>
+      <details class="research-options">
+        <summary>Optional model comparison</summary>
+        <label for="list-relation">BioKG relation ID</label>
+        <select id="list-relation"><option value="">Recorded DrugBank entries only</option></select>
+        <p class="muted">Choose a relation to also compute research scores for pairs in the model graph. A high model score is not an interaction severity or clinical probability.</p>
+      </details>
+      <button type="button" id="check-list" disabled>Check selected pairs</button>
+      <p id="list-status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="list-results" aria-live="polite" aria-label="Medication pair results" hidden></section>
+
+    <details class="card" id="index-mode">
+      <summary><strong>Use local BioKG drug indices</strong></summary>
+      <h2>Compare a pair by local index</h2>
       <p class="muted">
-        Use local BioKG drug indices, not DrugBank IDs or PubChem CIDs.
+        Use local BioKG drug indices. DrugBank IDs identify records in DrugBank; PubChem CIDs identify chemical compounds in PubChem. Use name search above to resolve either identifier to a supported drug.
         {% if drug_count %}
         Valid range: 0–{{ drug_count - 1 }}.
         {% endif %}
@@ -243,7 +287,7 @@
 
         <p id="form-status" class="error" role="alert"></p>
       </form>
-    </section>
+    </details>
 
     {% if prediction_result %}
     <section class="card">
@@ -251,10 +295,10 @@
 
       <p>
         {{ prediction_result.drug1_name }}
-        ({{ prediction_result.drug1_id }})
+        (local index {{ prediction_result.drug1_id }}, {{ prediction_result.drug1_identifier }})
         /
         {{ prediction_result.drug2_name }}
-        ({{ prediction_result.drug2_id }})
+        (local index {{ prediction_result.drug2_id }}, {{ prediction_result.drug2_identifier }})
       </p>
 
       <p>
@@ -285,7 +329,7 @@
       '_info') %}
       {% if info %}
       <div class="metadata">
-        <h3>Drug {{ number }} — optional DrugBank metadata</h3>
+        <h3>{{ info.get("name") or prediction_result.get("drug" ~ number ~ "_name") }} — DrugBank details</h3>
 
         {% if info.get('drugbank_id') %}
         <p>
@@ -305,16 +349,16 @@
         {% endif %}
 
         {% if info.get('description') %}
-        <p>{{ info.description[:200] }}</p>
+        <details open><summary>Full drug description</summary><p class="description">{{ info.description }}</p></details>
         {% endif %}
 
         {% if info.get('targets') %}
-        <p>Recorded targets:</p>
+        <details><summary>Recorded targets ({{ info.targets | length }})</summary>
         <ul>
-          {% for target in info.targets[:3] %}
+          {% for target in info.targets %}
           <li>{{ target }}</li>
           {% endfor %}
-        </ul>
+        </ul></details>
         {% endif %}
       </div>
       {% endif %}
@@ -383,8 +427,8 @@
       'click',
       () => {
         const max = first.max ? Number(first.max) : Infinity;
-        first.value = max >= 89 ? '58' : '0';
-        second.value = max >= 89 ? '89' : '1';
+        first.value = max >= 21 ? '17' : '0';
+        second.value = max >= 21 ? '21' : '1';
 
         first.setCustomValidity('');
         second.setCustomValidity('');
@@ -437,6 +481,7 @@
           )
           .forEach(relation => {
             relationSelect.add(new Option(relation, relation));
+            document.getElementById('list-relation').add(new Option('Relation ' + relation, relation));
           });
 
         relationSelect.disabled = false;
@@ -456,6 +501,7 @@
 
     loadRelations();
   </script>
+  <script src="{{ url_for('static', filename='drug-picker.js') }}" defer></script>
 </body>
 
 </html>

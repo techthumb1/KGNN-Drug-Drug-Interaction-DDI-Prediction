@@ -49,19 +49,15 @@ def register_batch(app):
                 "relation_type",
             ]
 
-            if (
-                not reader.fieldnames
-                or not set(required).issubset(
-                    reader.fieldnames
-                )
+            names = ["drug1", "drug2", "relation_type"]
+            if not reader.fieldnames or not (
+                set(required).issubset(reader.fieldnames) or set(names).issubset(reader.fieldnames)
             ):
-                raise ValueError(
-                    "CSV requires drug1_id, drug2_id, "
-                    "relation_type headers"
-                )
+                raise ValueError("CSV requires drug1_id,drug2_id,relation_type or drug1,drug2,relation_type headers")
 
             buffer = io.StringIO()
             fields = required + [
+                "drug1_name", "drug2_name", "drug1", "drug2",
                 "uncalibrated_model_score",
                 "error",
             ]
@@ -76,7 +72,7 @@ def register_batch(app):
                     result = score_request(row)
                     writer.writerow(
                         {
-                            key: result.get(key, "")
+                            key: result.get(key, row.get(key, ""))
                             for key in fields
                         }
                     )
@@ -91,6 +87,7 @@ def register_batch(app):
                                 key: row.get(key, "")
                                 for key in required
                             },
+                            "drug1": row.get("drug1", ""), "drug2": row.get("drug2", ""),
                             "error": str(error),
                         }
                     )

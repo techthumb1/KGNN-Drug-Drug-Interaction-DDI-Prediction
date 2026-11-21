@@ -12,6 +12,7 @@ from flask import (
 
 from src.utils import model as runtime
 from src.utils.paths import PROJECT_ROOT
+from src.utils.drug_catalog import get_catalog
 from src.utils.drugbank_lookup import lookup_drug_by_cid
 from src.utils.drugbank_full_lookup import lookup_full_drug_info
 
@@ -38,8 +39,15 @@ def score_request(data):
             "Provide drug1_id, drug2_id and relation_type"
         )
 
-    first = parse_index(data.get("drug1_id"))
-    second = parse_index(data.get("drug2_id"))
+    if "drug1" in data or "drug2" in data:
+        catalog = get_catalog(runtime.entity_mappings.get("drug", {}))
+        chosen = [catalog.resolve(data.get(key)) for key in ("drug1", "drug2")]
+        if any(row["biokg_index"] is None for row in chosen):
+            raise ValueError("This drug is outside the model graph; use the recorded DrugBank check instead.")
+        first, second = (row["biokg_index"] for row in chosen)
+    else:
+        first = parse_index(data.get("drug1_id"))
+        second = parse_index(data.get("drug2_id"))
     relation = data.get("relation_type")
 
     if not isinstance(relation, str):
@@ -52,39 +60,25 @@ def score_request(data):
         relation,
         second,
     )
-    mappings = runtime.entity_mappings.get("drug", {})
-
     result = {
-        "drug1_id": first,
-        "drug2_id": second,
-        "drug1_name": str(
-            mappings.get(first, f"drug:{first}")
-        ),
-        "drug2_name": str(
-            mappings.get(second, f"drug:{second}")
-        ),
-        "relation_type": relation,
-        "uncalibrated_model_score": score,
+        "drug1_id": first, "drug2_id": second,
+        "relation_type": relation, "uncalibrated_model_score": score,
     }
+    return enrich_result(result)
 
-    for number, index in ((1, first), (2, second)):
-        raw = str(mappings.get(index, ""))
-        cid = (
-            raw.removeprefix("CID").lstrip(":0")
-            if raw.startswith("CID")
-            else ""
-        )
 
-        result[f"drug{number}_info"] = (
-            lookup_drug_by_cid(cid)
-            if cid.isdecimal()
-            else None
-        )
-        result[f"drug{number}_full_info"] = (
-            lookup_full_drug_info(cid)
-            if cid.isdecimal()
-            else None
-        )
+def enrich_result(result):
+    result = dict(result)
+    mappings = runtime.entity_mappings.get("drug", {})
+    catalog = get_catalog(mappings)
+    for number in (1, 2):
+        index = result[f"drug{number}_id"]
+        drug = catalog.by_index.get(index)
+        cid = drug["pubchem_cid"] if drug else None
+        result[f"drug{number}_name"] = drug["name"] if drug else str(mappings.get(index, f"drug:{index}"))
+        result[f"drug{number}_identifier"] = str(mappings.get(index, f"drug:{index}"))
+        result[f"drug{number}_info"] = lookup_drug_by_cid(cid) if cid else None
+        result[f"drug{number}_full_info"] = lookup_full_drug_info(cid) if cid else None
 
     return result
 
@@ -152,31 +146,11 @@ def register_predict(app):
         if request.is_json:
             return jsonify(result)
 
-        browser_result = dict(result)
-
-        for number in (1, 2):
-            info = result.get(
-                f"drug{number}_full_info"
+        # Store only references and the score in the signed cookie. Full descriptions
+        # and target lists are reloaded server-side when rendering the result.
+        session["prediction_result"] = {
+            key: result[key] for key in (
+                "drug1_id", "drug2_id", "relation_type", "uncalibrated_model_score"
             )
-            if info:
-                browser_result[
-                    f"drug{number}_full_info"
-                ] = {
-                    key: info.get(key)
-                    for key in (
-                        "cas",
-                        "type",
-                        "drugbank_id",
-                    )
-                }
-                browser_result[
-                    f"drug{number}_full_info"
-                ].update(
-                    description=str(
-                        info.get("description", "")
-                    )[:200],
-                    targets=info.get("targets", [])[:3],
-                )
-
-        session["prediction_result"] = browser_result
+        }
         return redirect(url_for("index"))

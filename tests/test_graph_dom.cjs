@@ -63,7 +63,7 @@ const {JSDOM} = require('jsdom');
     for (const [type, expected] of [
       ['drug', [2, 1]],
       ['all', [3, 2]],
-      ['protein', [1, 0]],
+      ['protein', [3, 1]],
       ['all', [3, 2]]
     ]) {
       select.value = type;

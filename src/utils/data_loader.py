@@ -68,6 +68,10 @@ def download_file(url, dest_path):
 
 
 def ensure_required_files():
+    # Recorded DrugBank lookup is useful even when model scoring is disabled.
+    json_url = os.getenv("DRUGBANK_JSON_URL")
+    if json_url:
+        download_file(json_url, DRUGBANK_DATA_DIR / "drugbank_slim.json")
     if os.getenv("ENABLE_PREDICTIONS", "false").lower() != "true":
         return
 

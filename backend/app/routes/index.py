@@ -3,23 +3,32 @@ from flask import (
     jsonify,
     session,
     send_file,
+    request,
 )
 
 from src.utils import model as runtime
 from src.utils.paths import PROJECT_ROOT
+from src.utils.drug_catalog import get_catalog
 
 
 def register_index(app):
     @app.get("/")
     def index():
+        from .predict import enrich_result
+        result = session.pop("prediction_result", None)
         return render_template(
             "index.html",
-            prediction_result=session.pop(
-                "prediction_result", None
-            ),
+            prediction_result=enrich_result(result) if result else None,
             prediction_error=runtime.prediction_error,
             drug_count=runtime.graph["drug"].num_nodes,
         )
+
+    @app.get("/drugs/search")
+    def search_drugs():
+        catalog = get_catalog(runtime.entity_mappings.get("drug", {}))
+        query = request.args.get("q", "")[:160]
+        return jsonify({"drugs": catalog.search(query),
+                        "named_drugs": sum(bool(row["drugbank_id"]) for row in catalog.entries.values())})
 
     @app.get("/relations")
     def get_relation_types():
