@@ -1,5 +1,7 @@
 # BioKG Research Demo
 
+**[Open the live demo](https://kgnn-drug-drug-interaction-ddi-prediction-falling-sunset-9369.fly.dev/)** — publicly hosted on Fly.io.
+
 ![BioKG Research Demo — conceptual biomedical network artwork](public/biokg-research-demo-cover.png)
 
 *Conceptual cover illustration, not a visualization of actual BioKG records or model results.*
@@ -217,7 +219,7 @@ After training and reviewing complete evaluation, supply `models/rgcn_v2.pt`, or
 
 ## Public deployment
 
-The repository's automatic deployment targets Fly.io. The configured hostname is `kgnn-drug-drug-interaction-ddi-prediction-falling-sunset-9369.fly.dev`. The former Render hostname is a separate service and currently has no serving instance. Do not use the old Render link as proof of a live deployment.
+The repository's automatic deployment targets the [public Fly.io demo](https://kgnn-drug-drug-interaction-ddi-prediction-falling-sunset-9369.fly.dev/). This replaces the former Render demo link. The public app has been checked with drug-name search, recorded DrugBank interactions, model predictions and decoder score explanations enabled.
 
 The Fly workflow provisions a private Flask session key only when missing, deploys the image, then requires a successful public `/healthz` response. It captures runtime logs and health checks when deployment fails. The container prepares the public BioKG training data during its build and discards held-out evaluation tensors from the serving image; production inference does not need those large candidate sets. DrugBank and model artifacts still use authorized host configuration. Local data files are not copied to a remote service by a Git push.
 
