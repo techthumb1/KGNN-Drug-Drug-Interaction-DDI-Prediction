@@ -221,7 +221,7 @@ The repository's automatic deployment targets Fly.io. The configured hostname is
 
 The Fly workflow provisions a private Flask session key only when missing, deploys the image, then requires a successful public `/healthz` response. It captures runtime logs and health checks when deployment fails. The container prepares the public BioKG training data during its build and discards held-out evaluation tensors from the serving image; production inference does not need those large candidate sets. DrugBank and model artifacts still use authorized host configuration. Local data files are not copied to a remote service by a Git push.
 
-The health response distinguishes graph readiness, predictions, and decoder explanations. Full feature availability must be checked on the public host before describing it as an enabled model demo.
+The health response distinguishes graph readiness, predictions, and decoder explanations. Full feature availability must be checked on the public host before describing it as an enabled model demo. A missing or invalid optional DrugBank export is reported explicitly on the homepage and in pair coverage; it does not prevent graph exploration from starting. Required graph/checkpoint validation remains strict.
 
 ## Deployment on Render
 

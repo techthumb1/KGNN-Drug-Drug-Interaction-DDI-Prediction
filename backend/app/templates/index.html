@@ -195,6 +195,10 @@
       supplies drug names, identifiers and target details when your local metadata files contain a matching record.
     </p>
 
+    {% if metadata_error %}
+    <section class="notice" role="status"><strong>Recorded interaction lookup unavailable</strong><p>{{ metadata_error }} Name search and recorded BioKG relationships remain available.</p></section>
+    {% endif %}
+
     {% if prediction_error %}
     <section class="notice" role="status">
       <strong>Predictions unavailable</strong>

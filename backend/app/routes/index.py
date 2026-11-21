@@ -9,6 +9,7 @@ from flask import (
 from src.utils import model as runtime
 from src.utils.paths import PROJECT_ROOT
 from src.utils.drug_catalog import get_catalog
+from src.utils import drugbank_full_lookup as metadata
 
 
 def register_index(app):
@@ -20,6 +21,7 @@ def register_index(app):
             "index.html",
             prediction_result=enrich_result(result) if result else None,
             prediction_error=runtime.prediction_error,
+            metadata_error=metadata.metadata_error,
             drug_count=runtime.graph["drug"].num_nodes,
         )
 

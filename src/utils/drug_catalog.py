@@ -132,7 +132,7 @@ def get_catalog(mappings):
 
 def recorded_interactions(drugs):
     path = Path(metadata.DRUGBANK_JSON)
-    if not path.is_file():
+    if metadata.metadata_error or not path.is_file():
         return [], False
     chosen = tuple(sorted({(d["drugbank_id"], normalized(metadata.drugbank_entries[d["drugbank_id"]]["name"]))
                            for d in drugs if d["drugbank_id"] in metadata.drugbank_entries}))

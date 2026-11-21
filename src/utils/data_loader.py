@@ -1,5 +1,6 @@
 """Prepare configured artifacts before importing model-backed routes."""
 import os
+import logging
 from pathlib import Path
 import tempfile
 from urllib.parse import urlparse
@@ -71,7 +72,10 @@ def ensure_required_files():
     # Recorded DrugBank lookup is useful even when model scoring is disabled.
     json_url = os.getenv("DRUGBANK_JSON_URL")
     if json_url:
-        download_file(json_url, DRUGBANK_DATA_DIR / "drugbank_slim.json")
+        try:
+            download_file(json_url, DRUGBANK_DATA_DIR / "drugbank_slim.json")
+        except RuntimeError:
+            logging.getLogger(__name__).warning("DrugBank metadata download unavailable; source graph remains enabled.")
     if os.getenv("ENABLE_PREDICTIONS", "false").lower() != "true":
         return
 
@@ -89,7 +93,6 @@ def ensure_required_files():
         download_file(model_url, MODEL_CHECKPOINT)
 
     for variable, filename in (
-        ("DRUGBANK_JSON_URL", "drugbank_slim.json"),
         ("DRUGBANK_XML_URL", "drugbank_all_drug_links.xml"),
     ):
         if filename.endswith(".xml") and (DRUGBANK_DATA_DIR / "drugbank_slim.json").is_file():
