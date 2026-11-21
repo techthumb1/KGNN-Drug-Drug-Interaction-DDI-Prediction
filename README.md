@@ -11,8 +11,8 @@ This is not a clinical decision tool. Source relationships and model scores do n
 ## Current functionality
 
 - Explore recorded training-split relationships incident to two selected drugs.
-- Display up to 100 edges, with typed entity identifiers and recorded relation IDs.
-- Filter the returned neighborhood by entity type and inspect node identifiers.
+- Display up to 100 edges with typed identifiers, available entity names and recorded relation names.
+- Apply entity-type filters before truncation; search entities and inspect source definitions, identifiers and recorded connections.
 - See an explicit message when the returned neighborhood is truncated.
 - Run single and CSV batch scoring only when compatible, evaluated v2 model weights are available and predictions are explicitly enabled.
 - Return scores as `uncalibrated_model_score`, without clinical likelihood thresholds.
@@ -215,6 +215,14 @@ The example 100-step configuration is not a validated training budget. Full-grap
 
 After training and reviewing complete evaluation, supply `models/rgcn_v2.pt`, or set `MODEL_URL` to a trusted compatible v2 checkpoint. Explicitly set `ENABLE_PREDICTIONS=true` to enable scoring. Do not use the legacy checkpoint URL.
 
+## Public deployment
+
+The repository's automatic deployment targets Fly.io. The configured hostname is `kgnn-drug-drug-interaction-ddi-prediction-falling-sunset-9369.fly.dev`. The former Render hostname is a separate service and currently has no serving instance. Do not use the old Render link as proof of a live deployment.
+
+The Fly workflow provisions a private Flask session key only when missing, deploys the image, then requires a successful public `/healthz` response. It captures runtime logs and health checks when deployment fails. The container prepares the public BioKG training data during its build and discards held-out evaluation tensors from the serving image; production inference does not need those large candidate sets. DrugBank and model artifacts still use authorized host configuration. Local data files are not copied to a remote service by a Git push.
+
+The health response distinguishes graph readiness, predictions, and decoder explanations. Full feature availability must be checked on the public host before describing it as an enabled model demo.
+
 ## Deployment on Render
 
 Create or locate a **Web Service** connected to this repository. Use the repository root and the reviewed deployment branch.
@@ -283,7 +291,7 @@ After deployment, capture new screenshots of:
 - The recorded relationship view using actual BioKG data.
 - The batch page, showing either its unavailable notice or actual results.
 
-The six-part article series is a tutorial and proposed research progression. The repository is a separate implementation. Validated graph-edge explainers, genomic/temporal extensions and broader tutorial integrations must not be presented as implemented here. Article 1 remains unchanged; revisions to Articles 2–6 are separate writing deliverables.
+Articles 2–6 now describe the current training graph, measured R-GCN demonstration, exact decoder explanation, medication list and named graph explorer. The compact GraphSAGE class remains teaching code, not a second deployed model. Validated graph-edge explainers and genomic/temporal extensions remain future work. The article package is a separate writing deliverable; Article 1 is unchanged.
 
 ## Sources
 

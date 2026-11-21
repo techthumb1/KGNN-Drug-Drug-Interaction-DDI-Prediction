@@ -17,6 +17,12 @@ COPY src /app/src
 COPY run.py .
 COPY prepare_runtime.py .
 
+# Prepare public source data during the build, so cold starts do not fetch
+# and extract several GB before the HTTP worker can answer.
+RUN ENABLE_PREDICTIONS=false python prepare_runtime.py \
+    && rm -f dataset/ogbl_biokg/split/random/valid.pt \
+             dataset/ogbl_biokg/split/random/test.pt
+
 ENV FLASK_ENV=production
 
 EXPOSE 8080
