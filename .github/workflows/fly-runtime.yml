@@ -1,0 +1,21 @@
+name: Inspect Fly runtime
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/fly-runtime.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Inspect cached artifact format without printing configuration secrets
+        run: >-
+          flyctl ssh console --machine 32876e02c56748 --command
+          'python -c "from pathlib import Path; import os; p=Path(\"/app/backend/drugbank_data/drugbank_slim.json\"); data=p.open(\"rb\").read(4096).lstrip() if p.exists() else b\"\"; print(\"artifact_format\", \"array\" if data.startswith(b\"[\") else \"object\" if data.startswith(b\"{\") else \"html\" if b\"<html\" in data.lower() else \"other\"); print(\"artifact_bytes\", p.stat().st_size if p.exists() else 0); print(\"expected_record_fields_present\", b\"pubchem\" in data and b\"drugbank_id\" in data); print(\"predictions_enabled\", os.getenv(\"ENABLE_PREDICTIONS\", \"false\") == \"true\"); print(\"checkpoint_present\", Path(\"/app/models/rgcn_v2.pt\").exists())"'
