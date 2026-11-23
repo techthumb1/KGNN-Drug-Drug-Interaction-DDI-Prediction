@@ -1,0 +1,112 @@
+{
+  "dataset": "ogbl-biokg",
+  "seed": 42,
+  "notes": "Sampled metrics and times rounded to five decimals. RSS includes dataset and graph. Timings are from a shared CPU environment and include candidate scoring within each batch, excluding model initialization and any cached graph encoding.",
+  "runs": [
+    {
+      "experiment": "R-GCN 100 steps",
+      "task": "entity",
+      "scope": "matched validation sample",
+      "queries": 64,
+      "ddi_queries": 13,
+      "mrr": 0.14384,
+      "ddi_mrr": 0.27949,
+      "median_seconds_per_query": 0.00047,
+      "peak_rss_gib": 3.4,
+      "complete": false
+    },
+    {
+      "experiment": "TRIX zero-shot",
+      "task": "entity",
+      "scope": "matched validation sample",
+      "queries": 64,
+      "ddi_queries": 13,
+      "mrr": 0.74074,
+      "ddi_mrr": 0.36078,
+      "median_seconds_per_query": 1.78634,
+      "peak_rss_gib": 3.63,
+      "complete": false
+    },
+    {
+      "experiment": "ULTRA 3g zero-shot",
+      "task": "entity",
+      "scope": "matched validation sample",
+      "queries": 64,
+      "ddi_queries": 13,
+      "mrr": 0.55325,
+      "ddi_mrr": 0.05898,
+      "median_seconds_per_query": 2.206,
+      "peak_rss_gib": 3.33,
+      "complete": false
+    },
+    {
+      "experiment": "R-GCN 100 steps",
+      "task": "relation",
+      "scope": "matched DDI validation sample",
+      "queries": 64,
+      "ddi_queries": 64,
+      "mrr": 0.30113,
+      "ddi_mrr": 0.30113,
+      "median_seconds_per_query": 0.00014,
+      "peak_rss_gib": 3.41,
+      "complete": false
+    },
+    {
+      "experiment": "TRIX zero-shot",
+      "task": "relation",
+      "scope": "matched DDI validation sample",
+      "queries": 64,
+      "ddi_queries": 64,
+      "mrr": 0.12981,
+      "ddi_mrr": 0.12981,
+      "median_seconds_per_query": 1.35444,
+      "peak_rss_gib": 5.17,
+      "complete": false
+    },
+    {
+      "experiment": "R-GCN 100 steps",
+      "task": "entity",
+      "scope": "official validation split",
+      "queries": 162886,
+      "mrr": 0.148652,
+      "complete": true
+    },
+    {
+      "experiment": "R-GCN 1,000 steps",
+      "task": "entity",
+      "scope": "official validation split",
+      "queries": 162886,
+      "mrr": 0.3788066280414048,
+      "complete": true
+    }
+  ],
+  "description_ablation": {
+    "official_ddi_sample": {
+      "structure_only": 0.284485,
+      "text_only": 0.074327,
+      "combined": 0.29904
+    },
+    "official_ddi_both_descriptions": {
+      "structure_only": 0.353633,
+      "text_only": 0.151503,
+      "combined": 0.357274
+    },
+    "heldout_drugs_with_non_ddi_context": {
+      "structure_only": 0.264118,
+      "text_only": 0.083932,
+      "combined": 0.283362
+    },
+    "heldout_drugs_both_descriptions": {
+      "structure_only": 0.335278,
+      "text_only": 0.127542,
+      "combined": 0.34261
+    },
+    "description_coverage": {
+      "matched_drugs": 1243,
+      "drugs_with_retained_terms": 438,
+      "excluded_sentences": 392,
+      "conflicting_projections": 0,
+      "source_sha256": "c6d3f12981feae910ac639c7b863cac686c4c1f0525fd13f83a96bb59f336697"
+    }
+  }
+}

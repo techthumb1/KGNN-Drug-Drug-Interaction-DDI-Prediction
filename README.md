@@ -97,6 +97,8 @@ Annotations use public services and require network access on a cold cache; only
 
 ## Application usage
 
+For a supported pair, **Rank model relations** orders all 38 BioKG drug–drug relation types by the active model's score. Select **Explain** to inspect a specific score. The ranking can also be exported as JSON.
+
 ### Check a medication list by name
 
 1. Search a generic or brand name (optionally including strength or dosage form), DrugBank ID (for example `DB00641`) or PubChem CID (for example `CID239`) and select the intended entry from the suggestions. Duplicate aliases for the same compound are rejected.
@@ -156,6 +158,10 @@ DistMult is symmetric for same-type entity pairs and has limitations for directi
 The old training script performed a forward pass and saved weights without optimization. The legacy downloadable checkpoint contains only `model_state_dict`, a two-dimensional encoder output and no relation decoder or training/evaluation metadata. Its training provenance cannot be established from that artifact, and it is incompatible with the corrected architecture.
 
 V2 checkpoints record the architecture, node counts, relation order, offsets, training-graph hash, optimizer steps, seed and evaluation reports. Loading checks this contract and uses strict parameter loading. Legacy or incompatible weights are not silently reused.
+
+## Model comparisons
+
+The [BioKG model evaluation](docs/biokg-model-evaluation.md) records the TRIX, ULTRA and R-GCN/DistMult comparison, the description ablation, coverage limits and reproducible training and evaluation commands.
 
 ## Evaluation and current limitations
 

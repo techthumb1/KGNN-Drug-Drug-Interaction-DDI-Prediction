@@ -134,6 +134,11 @@
           `Model relation ${pair.relation_type} · uncalibrated score: ${pair.model_score.toFixed(4)}` : `Model score unavailable: ${pair.model_status}`));
         if (pair.explanation_url) { const link = element('a', 'Explain model score'); link.href = pair.explanation_url; card.append(link, element('span', ' · ')); }
         if (pair.graph_url) { const link = element('a', 'View recorded relationships'); link.href = pair.graph_url; card.append(link); }
+        if (pair.relation_rank_url) {
+          const link = element('a', 'Rank model relations');
+          link.href = pair.relation_rank_url;
+          card.append(element('span', ' · '), link);
+        }
         results.append(card);
       }
       results.append(element('p', body.source, 'muted')); results.hidden = false;

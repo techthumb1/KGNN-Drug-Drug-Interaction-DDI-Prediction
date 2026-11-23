@@ -202,11 +202,17 @@ def train(args):
         **config,
     ).to(device)
 
-    edges, edge_types = flatten_graph(
-        graph,
-        contract,
-        device,
-    )
+    if args.sparse_cpu:
+        if device.type != "cpu":
+            raise ValueError("Sparse CPU training requires --device cpu")
+        from src.train.sparse_rgcn import SparseRGCN
+
+        training_model = SparseRGCN(model, graph, contract)
+        edges = edge_types = None
+    else:
+        training_model = model
+        edges, edge_types = flatten_graph(graph, contract, device)
+
     x_dict = {
         kind: graph[kind].x.to(device)
         for kind in contract["node_types"]
@@ -243,7 +249,7 @@ def train(args):
         )
 
         loss = optimize_step(
-            model,
+            training_model,
             optimizer,
             x_dict,
             edges,
@@ -265,9 +271,9 @@ def train(args):
             flush=True,
         )
 
-    model.eval()
+    training_model.eval()
     with torch.inference_mode():
-        embeddings = model(
+        embeddings = training_model(
             x_dict,
             edges,
             edge_types,
@@ -355,6 +361,10 @@ def main():
             if torch.cuda.is_available()
             else "cpu"
         ),
+    )
+    parser.add_argument(
+        "--sparse-cpu", action="store_true",
+        help="Cache equivalent sparse relation means for full-graph CPU training",
     )
     parser.add_argument(
         "--max-eval",

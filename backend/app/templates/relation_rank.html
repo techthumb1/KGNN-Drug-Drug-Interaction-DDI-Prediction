@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BioKG relation ranking</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f7fa; color: #183044; font: 16px/1.6 system-ui, sans-serif; }
+    main { max-width: 920px; margin: 32px auto; padding: 0 20px 40px; }
+    nav { display: flex; flex-wrap: wrap; gap: 18px; margin-bottom: 24px; }
+    a { color: #006b78; }
+    h1 { margin: 0; }
+    .pair { margin-top: 8px; font-size: 1.2rem; }
+    .card { background: #fff; border: 1px solid #d5dfe6; border-radius: 12px; padding: 20px; }
+    .table-wrap { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { text-align: left; padding: 12px 10px; border-bottom: 1px solid #d5dfe6; vertical-align: top; }
+    th[scope="row"] { font-weight: 500; }
+    .numeric { font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .muted { color: #526675; }
+    :focus-visible { outline: 3px solid #d39a28; outline-offset: 3px; }
+  </style>
+</head>
+<body>
+  <main>
+    <nav aria-label="Main navigation">
+      <a href="{{ url_for('index') }}">Medication list</a>
+      {% if result %}
+      <a href="/graph?drug1_id={{ result.drug1_id }}&amp;drug2_id={{ result.drug2_id }}">Recorded relationships</a>
+      <a href="{{ url_for('relation_rank', drug1_id=result.drug1_id, drug2_id=result.drug2_id, format='json') }}">Ranking JSON</a>
+      {% endif %}
+    </nav>
+    <h1>BioKG relation ranking</h1>
+    {% if error %}
+    <p role="alert">{{ error }}</p>
+    {% else %}
+    <p class="pair">{{ result.drug1_name }} + {{ result.drug2_name }}</p>
+    <p class="muted">{{ result.predictor }} scores {{ result.relations | length }} BioKG relation types for this pair. Rank is based on the experimental model score. The scores are uncalibrated and have no established clinical interpretation.</p>
+    <section class="card table-wrap" aria-label="Ranked BioKG relation types">
+      <table>
+        <thead><tr><th scope="col">Rank</th><th scope="col">BioKG relation</th><th scope="col">Model score</th><th scope="col">Attribution</th></tr></thead>
+        <tbody>
+          {% for item in result.relations %}
+          <tr>
+            <td class="numeric">{{ loop.index }}</td>
+            <th scope="row">{{ item.relation_name }} <span class="muted">· ID {{ item.relation_type }}</span></th>
+            <td class="numeric">{{ '%.4f' | format(item.uncalibrated_model_score) }}</td>
+            <td><a href="/explain_view?drug1_id={{ result.drug1_id }}&amp;drug2_id={{ result.drug2_id }}&amp;relation_type={{ item.relation_type }}" aria-label="Explain {{ item.relation_name }} score">Explain</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% endif %}
+  </main>
+</body>
+</html>
