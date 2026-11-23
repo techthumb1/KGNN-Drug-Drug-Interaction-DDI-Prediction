@@ -26,7 +26,12 @@ def main():
     if os.getenv("ENABLE_PREDICTIONS", "false").lower() == "true":
         from src.utils.checkpoint import load_checkpoint
 
-        load_checkpoint(MODEL_CHECKPOINT, contract, "cpu")
+        model, _ = load_checkpoint(MODEL_CHECKPOINT, contract, "cpu")
+        if os.getenv("REQUIRE_GRAPH_EXPLAINER", "false").lower() == "true":
+            from src.explain.explain_pg import artifact_status
+
+            if artifact_status(model, contract["train_graph_sha256"]) != "pgexplainer":
+                raise RuntimeError("PGExplainer must match the evaluated serving checkpoint")
     from src.utils import drugbank_lookup, drugbank_full_lookup
 
     from src.utils.drug_catalog import get_catalog

@@ -18,8 +18,10 @@ import torch
 from torch import nn
 
 from src.utils.graph_contract import query_indices
+from src.utils.paths import MODEL_CHECKPOINT
 
-ARTIFACT = Path(__file__).resolve().parent / "artifacts" / "pgexplainer.pt"
+ARTIFACT = MODEL_CHECKPOINT.with_name("pgexplainer.pt")
+LEGACY_ARTIFACT = Path(__file__).resolve().parent / "artifacts" / "pgexplainer.pt"
 FORMAT = "biokg-pgexplainer-message-gates-v1"
 MAX_EDGES = 50000
 _lock = Lock()
@@ -211,6 +213,8 @@ class ExplanationEngine:
 
 
 def load_artifact(engine, path=ARTIFACT):
+    if path == ARTIFACT and not path.is_file():
+        path = LEGACY_ARTIFACT
     payload = torch.load(path, map_location="cpu", weights_only=True)
     if (
         payload.get("format") != FORMAT

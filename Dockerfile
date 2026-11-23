@@ -1,3 +1,9 @@
+FROM python:3.11.12-slim-bookworm AS serving-model
+
+WORKDIR /bundle
+COPY deployment/ .
+RUN python unpack_model.py /verified
+
 FROM python:3.11.12-slim-bookworm
 
 WORKDIR /app
@@ -16,10 +22,12 @@ COPY backend /app/backend
 COPY src /app/src
 COPY run.py .
 COPY prepare_runtime.py .
+COPY --from=serving-model /verified/rgcn_v2.pt /app/models/rgcn_v2.pt
+COPY --from=serving-model /verified/pgexplainer.pt /app/models/pgexplainer.pt
 
 # Prepare public source data during the build, so cold starts do not fetch
 # and extract several GB before the HTTP worker can answer.
-RUN ENABLE_PREDICTIONS=false python prepare_runtime.py \
+RUN ENABLE_PREDICTIONS=true REQUIRE_GRAPH_EXPLAINER=true python prepare_runtime.py \
     && rm -f dataset/ogbl_biokg/split/random/valid.pt \
              dataset/ogbl_biokg/split/random/test.pt
 

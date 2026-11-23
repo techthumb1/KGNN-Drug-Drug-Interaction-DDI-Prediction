@@ -34,7 +34,12 @@ jobs:
       - name: Deploy production app
         run: flyctl deploy --remote-only --wait-timeout 15m
       - name: Verify public readiness
-        run: curl --fail --show-error --retry 12 --retry-all-errors --retry-delay 10 --max-time 30 https://kgnn-drug-drug-interaction-ddi-prediction-falling-sunset-9369.fly.dev/healthz
+        shell: bash
+        run: |
+          set -euo pipefail
+          demo_url=https://kgnn-drug-drug-interaction-ddi-prediction-falling-sunset-9369.fly.dev
+          curl --fail --show-error --retry 12 --retry-all-errors --retry-delay 10 --max-time 30 "$demo_url/healthz" |
+            python -c 'import json, sys; data = json.load(sys.stdin); print(data); assert data["predictions"] == "ready" and data["graph_explanations"] == "pgexplainer" and data["model_optimizer_steps"] == 1000'
       - name: Capture runtime diagnostics
         if: always()
         run: |

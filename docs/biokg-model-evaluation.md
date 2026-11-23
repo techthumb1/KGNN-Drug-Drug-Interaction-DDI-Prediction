@@ -1,8 +1,8 @@
 # Model evaluation on BioKG
 
-The current demo uses the evaluated 100-step R-GCN/DistMult checkpoint and its predictor-bound PGExplainer. A stronger R-GCN candidate reached **0.3788 MRR** against **0.1487** for the reference on all 162,886 official validation triples. The longer run used the same architecture, seed, batch size, and learning rate. Its sparse CPU implementation reproduced the reference embeddings to within 0.0000035 and passed forward and gradient parity checks.
+The 100-step R-GCN/DistMult checkpoint is the historical serving reference. A stronger R-GCN candidate reached **0.3788 MRR** against **0.1487** for the reference on all 162,886 official validation triples. The longer run used the same architecture, seed, batch size, and learning rate. Its sparse CPU implementation reproduced the reference embeddings to within 0.0000035 and passed forward and gradient parity checks.
 
-The current serving choice uses cached embeddings with full benchmark coverage and an independently measured explainer. A separate GitHub Actions reproduction froze the 1,000-step weights using validation and evaluated them once on test. The reproduced candidate and its matching explainer passed artifact verification. The pair ranking on this branch uses the app's configured checkpoint and supports all 38 drug–drug relations. Production promotion of the candidate is pending.
+The current serving choice uses cached embeddings with full benchmark coverage and an independently measured explainer. A separate GitHub Actions reproduction froze the 1,000-step weights using validation and evaluated them once on test. The reproduced candidate and its matching explainer passed artifact verification. The Fly image builds from the evaluated 1,000-step checkpoint and its matching explainer, and the deployment check requires both to be ready. Pair ranking supports all 38 drug–drug relations.
 
 | Official split | 100-step reference MRR | Reproduced 1,000-step MRR | Drug–drug triples | Reproduced drug–drug MRR |
 | --- | ---: | ---: | ---: | ---: |
@@ -10,6 +10,17 @@ The current serving choice uses cached embeddings with full benchmark coverage a
 | Test | 0.147863 | 0.377500 | 31,151 | 0.521393 |
 
 The new PGExplainer passed the existing binding and held-out fidelity checks on 32 queries. Mean logit error was 4.4093 when retaining the top 20% of messages and 5.6689 with an equal random budget. Maximum unmasked reconstruction error was 0.00000191. The archive contains both evaluated artifacts and their reports. [R-GCN and PGExplainer artifact](https://github.com/techthumb1/KGNN-Drug-Drug-Interaction-DDI-Prediction/actions/runs/45145263213/artifacts/14804069262)
+
+## Full drug–drug relation ranking
+
+The evaluated R-GCN also ranked each known relation against the alternatives for the same ordered drug pair.
+
+| Official split | Drug–drug triples | Filtered relation MRR | Median seconds per query |
+| --- | ---: | ---: | ---: |
+| Validation | 31,135 | 0.401589 | 0.000024 |
+| Test | 31,151 | 0.426052 | 0.000025 |
+
+The timing uses CPU batches of 512 and excludes graph preparation and embedding precomputation. The public pair ranking displays all 38 candidate scores. Filtering applies only to benchmark evaluation. [Validation report](biokg-results/rgcn-relation-valid.json) · [Test report](biokg-results/rgcn-relation-test.json)
 
 ## Matched validation samples
 

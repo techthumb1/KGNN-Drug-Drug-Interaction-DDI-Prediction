@@ -20,13 +20,13 @@ This is not a clinical decision tool. Source relationships and model scores do n
 - Return scores as `uncalibrated_model_score`, without clinical likelihood thresholds.
 - Report graph readiness separately from prediction availability at `/healthz`.
 
-Predictions default to **unavailable**. The graph explorer can run without a model checkpoint, but still requires the official BioKG dataset.
+In a local source setup, predictions are opt-in. The graph explorer can run without a model checkpoint, but still requires the official BioKG dataset.
 
 `/explain_view` now provides an exact DistMult decoder score decomposition for a supported pair/relation. `/explain` returns the full numerical explanation as JSON: every learned dimension's signed logit term, the score with that term removed, and positive/negative totals. This holds cached graph embeddings fixed; it does not attribute graph edges or assign biological meaning to dimensions. The DistMult decoder is symmetric for a fixed relation. A trained PGExplainer adaptation now provides graph-message attribution at `/explain_graph`, with a separate section on `/explain_view`. Random weights, hard-coded SHAP values and untrained GraphSAGE inference remain disabled.
 
 ## Graph attribution and GraphSAGE
 
-PGExplainer is an explanation model, separate from the R-GCN encoder and DistMult decoder. This implementation adapts the paper's shared edge-mask network and Concrete sampling to a relation-conditioned link score. It is not an untrained PyG explainer instantiated at request time. The 105 KB trained artifact and its evaluation report are included under `src/explain/artifacts/`; no additional download URL, secret or Python dependency is required.
+PGExplainer is an explanation model, separate from the R-GCN encoder and DistMult decoder. This implementation adapts the paper's shared edge-mask network and Concrete sampling to a relation-conditioned link score. It is not an untrained PyG explainer instantiated at request time. The production image installs the evaluated explainer alongside its predictor in `models/` from the verified release bundle.
 
 The candidate scope is **every recorded training edge entering either queried drug**. A shared MLP receives source, target, edge-relation and query embeddings. Other graph context stays fixed. Learned gates multiply edge messages in both R-GCN layers, retaining original relation-wise mean denominators and self/root transformations. This is message gating, not physical edge deletion with degree renormalization. Unmasked calculations must reproduce the deployed predictor before any explanation is returned. This uses the model's full training context, not the graph explorer's truncated 100-edge display.
 
@@ -36,12 +36,12 @@ The explainer was trained for 50 epochs on 128 query examples, with 6,400 optimi
 
 | Held-out explanation measure | Result |
 | --- | ---: |
-| Mean logit error, retaining top 20% of candidate edges | 1.9923 |
-| Mean logit error, retaining equal-budget random edges | 5.1986 |
-| Mean absolute logit change, gating top 20% | 5.2377 |
-| Mean absolute logit change, gating random 20% | 1.9919 |
-| Mean absolute score error using the learned soft mask | 0.02837 |
-| Maximum unmasked logit reconstruction error | 0.000002384 |
+| Mean logit error, retaining top 20% of candidate edges | 4.4093 |
+| Mean logit error, retaining equal-budget random edges | 5.6689 |
+| Mean absolute logit change, gating top 20% | 4.6970 |
+| Mean absolute logit change, gating random 20% | 2.0311 |
+| Mean absolute score error using the learned soft mask | 0.03123 |
+| Maximum unmasked logit reconstruction error | 0.000001907 |
 
 The artifact is bound to the exact predictor parameters and training-graph hash. Missing, stale, degenerate or unevaluated artifacts return an explicit unavailable response. Computational neighborhoods above 50,000 candidate edges are rejected rather than truncated. First use initializes a CPU explanation cache; concurrent explanation work is bounded to one request. `/healthz` reports `graph_explanations` separately from the decoder explanation.
 
@@ -171,19 +171,19 @@ Serving requires complete official validation and test reports. A partial run ma
 
 Verification performed during the refresh included:
 
-- 39 Python regression tests covering startup, transfers, indexing, scoring, optimization, checkpoint rejection and routes.
+- 41 Python regression tests covering startup, transfers, indexing, scoring, optimization, checkpoint rejection and routes.
 - DOM/D3 checks for rendering, filtering, truncation and entity inspection.
 - Startup and graph checks using actual official BioKG data.
-- A 100-step training run on the official training graph (seed 42, batch size 1024, hidden size 64, learning rate 0.001), followed by complete validation and fixed-weight test evaluation.
+- A 1,000-step sparse CPU run on the official training graph (seed 42, batch size 1024, hidden size 64, learning rate 0.001), followed by complete validation and fixed-weight test evaluation.
 
-The 100-step demonstration candidate produced these official ranking results:
+The reproduced 1,000-step serving candidate produced these official ranking results:
 
-| Split | Evaluated triples | Overall MRR |
-| --- | ---: | ---: |
-| Validation | 162,886 | 0.148652 |
-| Test | 162,870 | 0.147863 |
+| Split | Evaluated triples | Overall MRR | Drug–drug MRR |
+| --- | ---: | ---: | ---: |
+| Validation | 162,886 | 0.378657 | 0.523883 |
+| Test | 162,870 | 0.377500 | 0.521393 |
 
-Test evaluation used the same selected weights without retraining. The exact-triple audit found zero training overlaps in both held-out splits. These are results for a single 100-step demonstration recipe, not a convergence claim or a tuned benchmark. Scores remain uncalibrated. The app exposes an exact decoder decomposition plus a separately trained PGExplainer adaptation for incoming edge-message attribution. Neither establishes a biological mechanism.
+Test evaluation used the frozen weights chosen on validation. The exact-triple audit found zero training overlaps in both held-out splits. An independently evaluated PGExplainer is bound to these weights. See the [evaluation and reproduction report](docs/biokg-model-evaluation.md) for the 100-step reference and matched foundation-model comparisons.
 
 ## Setup
 
@@ -223,7 +223,13 @@ Open `http://localhost:8080`. Enter local drug indices `58` and `89` and choose 
 
 ### Enable the already trained model
 
-The trained 100-step checkpoint is a separate artifact, because `models/*.pt` is ignored by Git. Pulling source code does not install weights. From the completed-update archive, extract only `models/rgcn_v2.pt` into this repository's `models/` directory; there is no need to import its Git bundle after pulling the published changes. The archive also contains evaluation results.
+Install the evaluated 1,000-step checkpoint and its matching PGExplainer from the checked-in release archive:
+
+```bash
+python deployment/unpack_model.py models
+```
+
+The unpacker verifies the SHA-256 of the complete archive before installing the pair. The training and test reports are available in the [reproduction artifact](https://github.com/techthumb1/KGNN-Drug-Drug-Interaction-DDI-Prediction/actions/runs/45145263213/artifacts/14804069262).
 
 Change `.env` to `ENABLE_PREDICTIONS=true`, run `python prepare_runtime.py`, then `python run.py`. Check `http://localhost:8080/healthz` for `"predictions": "ready"`. On the homepage, enter `58` and `89`, select relation ID `10`, and choose **Predict**. Inputs are BioKG local indices; the returned value is an uncalibrated link score. The same pair/relation can be submitted on the batch page with `drug1_id,drug2_id,relation_type` CSV headers. Training commands in the next section are for retraining, not for installing this existing checkpoint.
 
@@ -240,8 +246,8 @@ Training is separate from web startup.
 python -m src.train.train_rgcn --steps 1 --batch-size 32 \
   --hidden-channels 8 --max-eval 16 --output models/smoke_v2.pt
 
-# Example starting configuration; choose the training budget using validation.
-python -m src.train.train_rgcn --steps 100 --batch-size 1024 \
+# Reproduce the serving candidate on CPU.
+python -m src.train.train_rgcn --steps 1000 --batch-size 1024 --sparse-cpu \
   --output models/rgcn_candidate.pt
 
 # After complete validation, evaluate the same selected weights on the test split.
@@ -252,7 +258,7 @@ python -m src.train.evaluate_checkpoint --checkpoint models/rgcn_candidate.pt \
 
 `train_rgcn` evaluates validation only and defaults to `models/rgcn_candidate.pt`. The old `--evaluate-test` option is rejected because it retrained instead of evaluating the selected artifact. The finalizer preserves the candidate, audits exact split separation and records complete test results without changing its weights. Optimizer state stays in the training candidate and is omitted from the smaller serving artifact. It rejects incomplete validation and existing output paths.
 
-The example 100-step configuration is not a validated training budget. Full-graph R-GCN training can require substantial memory. Inspect overall and per-relation results before deciding whether the model is useful for the intended research task.
+The sparse CPU path computes relation-wise aggregation with sparse matrix multiplication. Full-graph R-GCN training can require substantial memory. Inspect overall and per-relation results before deciding whether the model is useful for the intended research task.
 
 After training and reviewing complete evaluation, supply `models/rgcn_v2.pt`, or set `MODEL_URL` to a trusted compatible v2 checkpoint. Explicitly set `ENABLE_PREDICTIONS=true` to enable scoring. Do not use the legacy checkpoint URL.
 
@@ -260,9 +266,9 @@ After training and reviewing complete evaluation, supply `models/rgcn_v2.pt`, or
 
 The repository's automatic deployment targets the [public Fly.io demo](https://kgnn-drug-drug-interaction-ddi-prediction-falling-sunset-9369.fly.dev/). This replaces the former Render demo link. The public app has been checked with drug-name search, recorded DrugBank interactions, model predictions and decoder score explanations enabled.
 
-The Fly workflow provisions a private Flask session key only when missing, deploys the image, then requires a successful public `/healthz` response. It captures runtime logs and health checks when deployment fails. The container prepares the public BioKG training data during its build and discards held-out evaluation tensors from the serving image; production inference does not need those large candidate sets. DrugBank and model artifacts still use authorized host configuration. Local data files are not copied to a remote service by a Git push.
+The Fly workflow provisions a private Flask session key only when missing, deploys the image, then requires a successful public `/healthz` response. It captures runtime logs and health checks when deployment fails. The container prepares the public BioKG training data during its build and discards held-out evaluation tensors from the serving image; production inference does not need those large candidate sets. The image installs the checksum-verified 1,000-step checkpoint and its matching explainer during the build. Optional DrugBank data uses the authorized host configuration.
 
-The health response distinguishes graph readiness, predictions, and decoder explanations. Full feature availability must be checked on the public host before describing it as an enabled model demo. A missing or invalid optional DrugBank export is reported explicitly on the homepage and in pair coverage; it does not prevent graph exploration from starting. Required graph/checkpoint validation remains strict.
+The health response reports graph readiness, predictions, decoder explanations, graph explanations and the optimizer step count of the loaded predictor. The Fly workflow expects the 1,000-step model and its ready PGExplainer. Full feature availability must be checked on the public host before describing it as an enabled model demo. A missing or invalid optional DrugBank export is reported explicitly on the homepage and in pair coverage; it does not prevent graph exploration from starting. Required graph/checkpoint validation remains strict.
 
 ## Deployment on Render
 
