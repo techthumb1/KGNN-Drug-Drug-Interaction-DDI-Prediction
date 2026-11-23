@@ -1,11 +1,6 @@
 name: Reproduce BioKG model artifacts
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      - .github/workflows/reproduce-biokg-models.yml
-      - src/train/**
   workflow_dispatch:
 
 permissions:
@@ -18,7 +13,6 @@ concurrency:
 jobs:
   rgcn:
     name: Reproduce R-GCN and PGExplainer
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feat/biokg-trix-benchmark-relation-ranking'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     env:
@@ -93,7 +87,6 @@ jobs:
 
   foundation:
     name: Compare foundation checkpoints (${{ matrix.model }})
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feat/biokg-trix-benchmark-relation-ranking'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:

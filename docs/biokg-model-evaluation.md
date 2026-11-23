@@ -2,7 +2,14 @@
 
 The current demo uses the evaluated 100-step R-GCN/DistMult checkpoint and its predictor-bound PGExplainer. A stronger R-GCN candidate reached **0.3788 MRR** against **0.1487** for the reference on all 162,886 official validation triples. The longer run used the same architecture, seed, batch size, and learning rate. Its sparse CPU implementation reproduced the reference embeddings to within 0.0000035 and passed forward and gradient parity checks.
 
-The current serving choice uses cached embeddings with full benchmark coverage and an independently measured explainer. The 1,000-step weights were frozen for official test evaluation. Their deployment and the new explainer's fidelity verification remain pending. The released checkpoint scores all 38 drug–drug relations in the pair ranking UI.
+The current serving choice uses cached embeddings with full benchmark coverage and an independently measured explainer. A separate GitHub Actions reproduction froze the 1,000-step weights using validation and evaluated them once on test. The reproduced candidate and its matching explainer passed artifact verification. The pair ranking on this branch uses the app's configured checkpoint and supports all 38 drug–drug relations. Production promotion of the candidate is pending.
+
+| Official split | 100-step reference MRR | Reproduced 1,000-step MRR | Drug–drug triples | Reproduced drug–drug MRR |
+| --- | ---: | ---: | ---: | ---: |
+| Validation | 0.148652 | 0.378657 | 31,135 | 0.523883 |
+| Test | 0.147863 | 0.377500 | 31,151 | 0.521393 |
+
+The new PGExplainer passed the existing binding and held-out fidelity checks on 32 queries. Mean logit error was 4.4093 when retaining the top 20% of messages and 5.6689 with an equal random budget. Maximum unmasked reconstruction error was 0.00000191. The archive contains both evaluated artifacts and their reports. [R-GCN and PGExplainer artifact](https://github.com/techthumb1/KGNN-Drug-Drug-Interaction-DDI-Prediction/actions/runs/45145263213/artifacts/14804069262)
 
 ## Matched validation samples
 
@@ -16,7 +23,14 @@ The current serving choice uses cached embeddings with full benchmark coverage a
 
 The sampled tests used the full training context and seed 42. These pilot results leave substantial uncertainty, particularly for the 13 drug–drug queries in the mixed entity sample. The timed batches use two queries each. Time excludes graph preparation and embedding precomputation. Peak process RSS includes evaluation data and ranges from 3.33 to 5.17 GiB across the sampled runs. See the [numerical summary](biokg-results/validation-summary.json).
 
-TRIX completed 32 decoder-only optimization steps on BioKG training data. Its post-tuning scores and the larger, DDI-only entity comparisons remain unverified. The upstream kernels and graph conversion matched the official forward pass on a small graph to within 0.000002 for both TRIX checkpoints and ULTRA. Full foundation-model evaluation and entity-held-out validation are required before considering a production switch.
+A second run scored 64 drug–drug validation triples using the same negative candidates before and after 32 decoder-only optimization steps. The backbone remained frozen. Each model used the same supervised sampling recipe and removed its training targets from both message graphs.
+
+| Model | Zero-shot MRR | Tuned MRR | Tuned median seconds per query |
+| --- | ---: | ---: | ---: |
+| TRIX | 0.301059 | 0.301994 | 1.422 |
+| ULTRA 3g | 0.078541 | 0.088284 | 1.819 |
+
+The upstream kernels and graph conversion matched the official forward pass on a small graph to within 0.000002 for both TRIX checkpoints and ULTRA. The small improvements after tuning need further evaluation. Full foundation-model splits and drug identity holdouts remain future experiments. [TRIX reports](https://github.com/techthumb1/KGNN-Drug-Drug-Interaction-DDI-Prediction/actions/runs/45145263213/artifacts/14805335090) · [ULTRA reports](https://github.com/techthumb1/KGNN-Drug-Drug-Interaction-DDI-Prediction/actions/runs/45145263213/artifacts/14805165456)
 
 ## Evaluation protocol
 

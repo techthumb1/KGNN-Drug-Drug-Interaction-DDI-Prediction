@@ -78,6 +78,70 @@
       "queries": 162886,
       "mrr": 0.3788066280414048,
       "complete": true
+    },
+    {
+      "experiment": "TRIX zero-shot",
+      "task": "entity",
+      "scope": "matched DDI validation sample",
+      "queries": 64,
+      "ddi_queries": 64,
+      "mrr": 0.3010592373320833,
+      "ddi_mrr": 0.3010592373320833,
+      "median_seconds_per_query": 1.406993300499991,
+      "complete": false
+    },
+    {
+      "experiment": "TRIX tuned decoder, 32 steps",
+      "task": "entity",
+      "scope": "matched DDI validation sample",
+      "queries": 64,
+      "ddi_queries": 64,
+      "mrr": 0.30199410195928067,
+      "ddi_mrr": 0.30199410195928067,
+      "median_seconds_per_query": 1.4220192090000126,
+      "complete": false
+    },
+    {
+      "experiment": "ULTRA 3g zero-shot",
+      "task": "entity",
+      "scope": "matched DDI validation sample",
+      "queries": 64,
+      "ddi_queries": 64,
+      "mrr": 0.07854089188913349,
+      "ddi_mrr": 0.07854089188913349,
+      "median_seconds_per_query": 1.839618094499997,
+      "complete": false
+    },
+    {
+      "experiment": "ULTRA 3g tuned decoder, 32 steps",
+      "task": "entity",
+      "scope": "matched DDI validation sample",
+      "queries": 64,
+      "ddi_queries": 64,
+      "mrr": 0.08828371640993282,
+      "ddi_mrr": 0.08828371640993282,
+      "median_seconds_per_query": 1.8191907439999966,
+      "complete": false
+    },
+    {
+      "experiment": "R-GCN 1,000 steps, reproduced",
+      "task": "entity",
+      "scope": "official validation split",
+      "queries": 162886,
+      "ddi_queries": 31135,
+      "mrr": 0.37865724812164436,
+      "ddi_mrr": 0.52388308986527,
+      "complete": true
+    },
+    {
+      "experiment": "R-GCN 1,000 steps, reproduced",
+      "task": "entity",
+      "scope": "official test split",
+      "queries": 162870,
+      "ddi_queries": 31151,
+      "mrr": 0.37749974175307927,
+      "ddi_mrr": 0.5213934904521487,
+      "complete": true
     }
   ],
   "description_ablation": {
@@ -108,5 +172,355 @@
       "conflicting_projections": 0,
       "source_sha256": "c6d3f12981feae910ac639c7b863cac686c4c1f0525fd13f83a96bb59f336697"
     }
-  }
+  },
+  "source_workflow": "https://github.com/techthumb1/KGNN-Drug-Drug-Interaction-DDI-Prediction/actions/runs/45145263213",
+  "official_reproduction": {
+    "valid": {
+      "split": "valid",
+      "mrr": 0.37865724812164436,
+      "evaluated_triples": 162886,
+      "total_triples": 162886,
+      "complete": true,
+      "protocol": "official provided typed negatives; mean head/tail MRR",
+      "drug_drug_relations": {
+        "2": {
+          "triples": 1762,
+          "mrr": 0.5436110962647416
+        },
+        "3": {
+          "triples": 515,
+          "mrr": 0.38177033890653583
+        },
+        "4": {
+          "triples": 843,
+          "mrr": 0.41383949858561814
+        },
+        "5": {
+          "triples": 1348,
+          "mrr": 0.4807775359633945
+        },
+        "6": {
+          "triples": 2635,
+          "mrr": 0.6655360215985034
+        },
+        "7": {
+          "triples": 9,
+          "mrr": 0.27362223631805843
+        },
+        "8": {
+          "triples": 963,
+          "mrr": 0.45569706020774253
+        },
+        "9": {
+          "triples": 4,
+          "mrr": 0.36145833879709244
+        },
+        "10": {
+          "triples": 398,
+          "mrr": 0.3642854823089724
+        },
+        "11": {
+          "triples": 1555,
+          "mrr": 0.5187139707626446
+        },
+        "12": {
+          "triples": 1003,
+          "mrr": 0.4280050817397929
+        },
+        "13": {
+          "triples": 2311,
+          "mrr": 0.6187220728875161
+        },
+        "14": {
+          "triples": 2200,
+          "mrr": 0.5566948956259611
+        },
+        "15": {
+          "triples": 83,
+          "mrr": 0.3248870461640588
+        },
+        "16": {
+          "triples": 8,
+          "mrr": 0.44856208749115467
+        },
+        "17": {
+          "triples": 951,
+          "mrr": 0.4241527492194177
+        },
+        "18": {
+          "triples": 1014,
+          "mrr": 0.44783624511072506
+        },
+        "19": {
+          "triples": 2053,
+          "mrr": 0.5510663006489183
+        },
+        "20": {
+          "triples": 237,
+          "mrr": 0.34078047605317857
+        },
+        "21": {
+          "triples": 17,
+          "mrr": 0.2746615997132133
+        },
+        "22": {
+          "triples": 1609,
+          "mrr": 0.5921661473018845
+        },
+        "23": {
+          "triples": 2228,
+          "mrr": 0.5873704800512675
+        },
+        "24": {
+          "triples": 11,
+          "mrr": 0.4661796607754447
+        },
+        "25": {
+          "triples": 47,
+          "mrr": 0.28016913309693336
+        },
+        "26": {
+          "triples": 27,
+          "mrr": 0.3355165030117388
+        },
+        "27": {
+          "triples": 14,
+          "mrr": 0.24829478349004472
+        },
+        "28": {
+          "triples": 90,
+          "mrr": 0.32425020643406444
+        },
+        "29": {
+          "triples": 56,
+          "mrr": 0.3034008841828576
+        },
+        "30": {
+          "triples": 472,
+          "mrr": 0.40909257858707493
+        },
+        "31": {
+          "triples": 2282,
+          "mrr": 0.6056128385379637
+        },
+        "32": {
+          "triples": 35,
+          "mrr": 0.33276736619217057
+        },
+        "33": {
+          "triples": 718,
+          "mrr": 0.351273263469961
+        },
+        "34": {
+          "triples": 62,
+          "mrr": 0.41464239449029966
+        },
+        "35": {
+          "triples": 375,
+          "mrr": 0.0828956510387361
+        },
+        "36": {
+          "triples": 122,
+          "mrr": 0.3392748431928578
+        },
+        "37": {
+          "triples": 129,
+          "mrr": 0.4345338534303876
+        },
+        "38": {
+          "triples": 1870,
+          "mrr": 0.5079113118390348
+        },
+        "39": {
+          "triples": 1079,
+          "mrr": 0.5018806880921733
+        }
+      }
+    },
+    "test": {
+      "split": "test",
+      "mrr": 0.37749974175307927,
+      "evaluated_triples": 162870,
+      "total_triples": 162870,
+      "complete": true,
+      "protocol": "official provided typed negatives; mean head/tail MRR",
+      "drug_drug_relations": {
+        "2": {
+          "triples": 1762,
+          "mrr": 0.5542809775693259
+        },
+        "3": {
+          "triples": 516,
+          "mrr": 0.37643665997961234
+        },
+        "4": {
+          "triples": 843,
+          "mrr": 0.4400897125491468
+        },
+        "5": {
+          "triples": 1348,
+          "mrr": 0.4911275020571155
+        },
+        "6": {
+          "triples": 2635,
+          "mrr": 0.6566410707956643
+        },
+        "7": {
+          "triples": 9,
+          "mrr": 0.20501664280891418
+        },
+        "8": {
+          "triples": 963,
+          "mrr": 0.4461044418535593
+        },
+        "9": {
+          "triples": 4,
+          "mrr": 0.42339441925287247
+        },
+        "10": {
+          "triples": 398,
+          "mrr": 0.368531713870602
+        },
+        "11": {
+          "triples": 1556,
+          "mrr": 0.5225270140681483
+        },
+        "12": {
+          "triples": 1004,
+          "mrr": 0.4083440871352694
+        },
+        "13": {
+          "triples": 2312,
+          "mrr": 0.6155903073515949
+        },
+        "14": {
+          "triples": 2201,
+          "mrr": 0.5524337481699295
+        },
+        "15": {
+          "triples": 84,
+          "mrr": 0.2971849972382188
+        },
+        "16": {
+          "triples": 9,
+          "mrr": 0.4010961867041058
+        },
+        "17": {
+          "triples": 952,
+          "mrr": 0.41546736862666966
+        },
+        "18": {
+          "triples": 1014,
+          "mrr": 0.4290918723277792
+        },
+        "19": {
+          "triples": 2053,
+          "mrr": 0.5539907697430339
+        },
+        "20": {
+          "triples": 237,
+          "mrr": 0.34282226206632604
+        },
+        "21": {
+          "triples": 17,
+          "mrr": 0.1966147045878803
+        },
+        "22": {
+          "triples": 1610,
+          "mrr": 0.5925328242922236
+        },
+        "23": {
+          "triples": 2229,
+          "mrr": 0.5921885634017477
+        },
+        "24": {
+          "triples": 11,
+          "mrr": 0.3606692010706121
+        },
+        "25": {
+          "triples": 47,
+          "mrr": 0.2757621266423388
+        },
+        "26": {
+          "triples": 27,
+          "mrr": 0.29712701602666464
+        },
+        "27": {
+          "triples": 15,
+          "mrr": 0.24393747026721638
+        },
+        "28": {
+          "triples": 90,
+          "mrr": 0.400760986821519
+        },
+        "29": {
+          "triples": 56,
+          "mrr": 0.3692573284996407
+        },
+        "30": {
+          "triples": 473,
+          "mrr": 0.4079500496875786
+        },
+        "31": {
+          "triples": 2283,
+          "mrr": 0.5938587477948782
+        },
+        "32": {
+          "triples": 35,
+          "mrr": 0.30168518598324484
+        },
+        "33": {
+          "triples": 719,
+          "mrr": 0.3322230997405977
+        },
+        "34": {
+          "triples": 62,
+          "mrr": 0.36265061044644925
+        },
+        "35": {
+          "triples": 373,
+          "mrr": 0.07619424868592288
+        },
+        "36": {
+          "triples": 123,
+          "mrr": 0.3516213482594102
+        },
+        "37": {
+          "triples": 130,
+          "mrr": 0.3657094193192629
+        },
+        "38": {
+          "triples": 1871,
+          "mrr": 0.5124539069468996
+        },
+        "39": {
+          "triples": 1080,
+          "mrr": 0.48763519943588307
+        }
+      }
+    }
+  },
+  "explainer": {
+    "queries": 32,
+    "retained_top_20_pct_mean_logit_error": 4.409294261597097,
+    "retained_random_20_pct_mean_logit_error": 5.6688989456743,
+    "maximum_reconstruction_error": 0.0000019073486328125
+  },
+  "artifacts": [
+    {
+      "name": "biokg-trix-entity-reproduction",
+      "sha256": "sha256:bfc0d32d039645f37599a1843ea39870ebde82ac120533bdc0a8851074e96e1c",
+      "url": "https://github.com/techthumb1/KGNN-Drug-Drug-Interaction-DDI-Prediction/actions/runs/45145263213/artifacts/14805335090"
+    },
+    {
+      "name": "biokg-ultra-reproduction",
+      "sha256": "sha256:310f8d74633f2c3a3f866967f4549fdc5735bc66023dafb7edc2fcef321305e3",
+      "url": "https://github.com/techthumb1/KGNN-Drug-Drug-Interaction-DDI-Prediction/actions/runs/45145263213/artifacts/14805165456"
+    },
+    {
+      "name": "biokg-rgcn-reproduction",
+      "sha256": "sha256:2eb61258a172f0315359a45dcd9c0fd17722e06239c8d7af17667fd8107034e9",
+      "url": "https://github.com/techthumb1/KGNN-Drug-Drug-Interaction-DDI-Prediction/actions/runs/45145263213/artifacts/14804069262"
+    }
+  ]
 }
