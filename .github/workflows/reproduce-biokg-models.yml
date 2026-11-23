@@ -89,3 +89,90 @@ jobs:
             models/rgcn_v2.evaluation.json
             models/pgexplainer.pt
             models/pgexplainer.evaluation.json
+
+
+  foundation:
+    name: Compare foundation checkpoints (${{ matrix.model }})
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feat/biokg-trix-benchmark-relation-ranking'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - model: trix-entity
+            upstream: https://github.com/yuchengz99/TRIX.git
+            revision: 7596e14eefefe89e61396205a0550172cadeddb0
+          - model: ultra
+            upstream: https://github.com/DeepGraphLearning/ULTRA.git
+            revision: 427966ad8ed60420eef034063d44f3153addff90
+    env:
+      MODEL_NAME: ${{ matrix.model }}
+      UPSTREAM_URL: ${{ matrix.upstream }}
+      UPSTREAM_REVISION: ${{ matrix.revision }}
+      OMP_NUM_THREADS: "3"
+      MKL_NUM_THREADS: "3"
+      MAX_JOBS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install research dependencies
+        run: |
+          python -m pip install torch==2.15.0 --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install -r requirements-research.txt
+          python -m pip install setuptools==78.1.0 wheel
+          python -m pip install --no-build-isolation --no-deps torch-scatter==2.1.2
+
+      - name: Check out pinned upstream
+        run: |
+          git clone "$UPSTREAM_URL" "$RUNNER_TEMP/biokg-upstream"
+          git -C "$RUNNER_TEMP/biokg-upstream" checkout "$UPSTREAM_REVISION"
+
+      - name: Score matched drug–drug validation queries before tuning
+        run: |
+          python -u -m src.train.evaluate_foundation --model "$MODEL_NAME" \
+            --upstream "$RUNNER_TEMP/biokg-upstream" --ddi-only --max-queries 64 --batch-size 2 \
+            --output artifacts/zero-shot-ddi-validation.json
+
+      - name: Fine-tune the entity decoder using training triples
+        run: |
+          python -u -m src.train.finetune_foundation --model "$MODEL_NAME" \
+            --upstream "$RUNNER_TEMP/biokg-upstream" --steps 32 --decoder-only \
+            --output artifacts/decoder-tuned.pt
+
+      - name: Score the same drug–drug validation queries after tuning
+        run: |
+          python -u -m src.train.evaluate_foundation --model "$MODEL_NAME" \
+            --upstream "$RUNNER_TEMP/biokg-upstream" --checkpoint artifacts/decoder-tuned.pt \
+            --ddi-only --max-queries 64 --batch-size 2 --output artifacts/tuned-ddi-validation.json
+
+      - name: Report the matched validation results
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          for path in sorted(Path("artifacts").glob("*validation.json")):
+              report = json.loads(path.read_text())
+              print(report["model"], path.stem, report["evaluated_triples"],
+                    report["mrr"], report["median_seconds_per_query"])
+              with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+                  summary.write(
+                      f"- {report['model']} {path.stem} MRR {report['mrr']:.6f} "
+                      f"across {report['evaluated_triples']} drug–drug queries\n"
+                  )
+          PY
+
+      - name: Upload foundation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: biokg-${{ matrix.model }}-reproduction
+          if-no-files-found: warn
+          path: artifacts/*validation.json
