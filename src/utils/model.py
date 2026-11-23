@@ -107,3 +107,29 @@ def predict_score(first, relation, second):
         )
 
     return score
+
+
+def rank_drug_relations(first, second):
+    relations = [(key[1], index) for key, index in rel_type_to_id.items()
+                 if key[0] == key[2] == "drug"]
+    if not relations:
+        raise PredictionUnavailable("No drug–drug relations are available.")
+    head, _, tail = query_indices(contract, first, relations[0][0], second)
+    if prediction_error:
+        raise PredictionUnavailable(prediction_error)
+
+    with torch.inference_mode():
+        logits = model.score(
+            embeddings,
+            torch.tensor(head, device=device),
+            torch.tensor([index for _, index in relations], device=device),
+            torch.tensor(tail, device=device),
+        )
+        if not torch.isfinite(logits).all():
+            raise PredictionUnavailable("Nonfinite relation scores")
+        scores = logits.sigmoid().tolist()
+        order = logits.argsort(descending=True, stable=True).tolist()
+    return [
+        {"relation_type": relations[index][0], "uncalibrated_model_score": scores[index]}
+        for index in order
+    ]

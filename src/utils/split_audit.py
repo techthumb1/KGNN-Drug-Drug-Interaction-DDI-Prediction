@@ -27,9 +27,19 @@ def audit_split_separation(dataset, graph, contract):
         heldout = split_tensors(split, contract, "cpu")
         keys = _keys(*(t.numpy() for t in heldout[:3]), contract)
         overlap = int(np.isin(keys, known, assume_unique=False).sum())
-        report[name] = {"triples": len(keys), "exact_train_overlap": overlap}
+        ddi = (np.asarray(split["head_type"]) == "drug") & (np.asarray(split["tail_type"]) == "drug")
+        reversed_ddi = _keys(
+            heldout[2].numpy()[ddi], heldout[1].numpy()[ddi], heldout[0].numpy()[ddi], contract
+        )
+        report[name] = {
+            "triples": len(keys),
+            "exact_train_overlap": overlap,
+            "drug_drug_triples": int(ddi.sum()),
+            "drug_drug_same_relation_reversed_in_train": int(np.isin(reversed_ddi, known).sum()),
+        }
         if overlap:
             raise ValueError(f"{name} contains {overlap} exact typed triples in the training graph")
-    # Reversed pairs and equivalent facts can cross a random split. This audit
-    # checks exact directed triples, not an entity-disjoint or temporal design.
+        del split
+    # Related facts can cross the random split even when exact and reversed
+    # overlap are zero. These counts do not establish an entity or temporal split.
     return report

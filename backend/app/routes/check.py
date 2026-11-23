@@ -1,7 +1,7 @@
 """Check a selected medication list using recorded data and optional model scores."""
 from itertools import combinations
 
-from flask import request, jsonify
+from flask import request, jsonify, url_for
 
 from src.utils import model as runtime
 from src.utils.drug_catalog import get_catalog, recorded_interactions
@@ -56,7 +56,10 @@ def register_check(app):
                     except runtime.PredictionUnavailable as error:
                         row["model_status"] = str(error)
             if first["biokg_index"] is not None and second["biokg_index"] is not None:
-                row["graph_url"] = f"/graph?drug1_id={first['biokg_index']}&drug2_id={second['biokg_index']}"
+                a, b = first["biokg_index"], second["biokg_index"]
+                row["graph_url"] = f"/graph?drug1_id={a}&drug2_id={b}"
+                if a != b and runtime.prediction_error is None:
+                    row["relation_rank_url"] = url_for("relation_rank", drug1_id=a, drug2_id=b)
             results.append(row)
         return jsonify(drugs=drugs, pairs=results,
                        source="Supplied DrugBank export; interaction partners matched by unambiguous exact names.",

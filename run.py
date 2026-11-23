@@ -45,7 +45,7 @@ except Exception as error:
 def healthz():
     from src.explain.explain_pg import artifact_status
 
-    return {
+    status = {
         "status": "ok",
         "graph": "ready",
         "predictions": (
@@ -58,7 +58,10 @@ def healthz():
             artifact_status(runtime.model, runtime.contract["train_graph_sha256"])
             if runtime.prediction_error is None else "unavailable"
         ),
-    }, 200
+    }
+    if runtime.prediction_error is None:
+        status["model_optimizer_steps"] = runtime.checkpoint["optimizer_steps"]
+    return status, 200
 
 
 if __name__ == "__main__":

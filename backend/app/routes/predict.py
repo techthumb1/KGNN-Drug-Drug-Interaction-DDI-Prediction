@@ -13,6 +13,7 @@ from flask import (
 from src.utils import model as runtime
 from src.utils.paths import PROJECT_ROOT
 from src.utils.drug_catalog import get_catalog
+from src.utils.entity_metadata import relation_label
 from src.utils.drugbank_lookup import lookup_drug_by_cid
 from src.utils.drugbank_full_lookup import lookup_full_drug_info
 
@@ -33,12 +34,7 @@ def parse_index(value):
     )
 
 
-def score_request(data):
-    if not isinstance(data, dict) and not hasattr(data, "get"):
-        raise ValueError(
-            "Provide drug1_id, drug2_id and relation_type"
-        )
-
+def resolve_pair(data):
     if "drug1" in data or "drug2" in data:
         catalog = get_catalog(runtime.entity_mappings.get("drug", {}))
         chosen = [catalog.resolve(data.get(key)) for key in ("drug1", "drug2")]
@@ -48,6 +44,16 @@ def score_request(data):
     else:
         first = parse_index(data.get("drug1_id"))
         second = parse_index(data.get("drug2_id"))
+    return first, second
+
+
+def score_request(data):
+    if not isinstance(data, dict) and not hasattr(data, "get"):
+        raise ValueError(
+            "Provide drug1_id, drug2_id and relation_type"
+        )
+
+    first, second = resolve_pair(data)
     relation = data.get("relation_type")
 
     if not isinstance(relation, str):
@@ -84,6 +90,33 @@ def enrich_result(result):
 
 
 def register_predict(app):
+    @app.get("/relation_rank")
+    def relation_rank():
+        as_json = request.args.get("format") == "json"
+        try:
+            first, second = resolve_pair(request.args)
+            items = runtime.rank_drug_relations(first, second)
+        except (runtime.PredictionUnavailable, ValueError, TypeError, KeyError) as error:
+            status = 503 if isinstance(error, runtime.PredictionUnavailable) else 400
+            if as_json:
+                return jsonify(error=str(error)), status
+            return render_template("relation_rank.html", error=str(error)), status
+
+        catalog = get_catalog(runtime.entity_mappings.get("drug", {}))
+        names = [catalog.by_index.get(index, {}).get("name", f"BioKG drug {index}")
+                 for index in (first, second)]
+        for item in items:
+            item["relation_name"] = relation_label(item["relation_type"]).removeprefix("drug-drug ")
+        result = {
+            "drug1_id": first, "drug2_id": second,
+            "drug1_name": names[0], "drug2_name": names[1],
+            "predictor": "R-GCN/DistMult",
+            "relations": items,
+        }
+        if as_json:
+            return jsonify(result)
+        return render_template("relation_rank.html", result=result)
+
     @app.post("/predict")
     def predict():
         try:

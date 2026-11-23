@@ -279,6 +279,10 @@
             Predict
           </button>
 
+          {% if not prediction_error %}
+          <button type="button" id="rank-relations-button">Rank model relations</button>
+          {% endif %}
+
           <button type="button" id="graph-button">
             View recorded relationships
           </button>
@@ -417,6 +421,15 @@
         second.setCustomValidity('');
       });
     }
+
+    document.getElementById('rank-relations-button')?.addEventListener('click', () => {
+      if (!validPair()) return;
+
+      location.href = '/relation_rank?' + new URLSearchParams({
+        drug1_id: first.value,
+        drug2_id: second.value
+      });
+    });
 
     document.getElementById('graph-button').addEventListener(
       'click',

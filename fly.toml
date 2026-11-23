@@ -10,6 +10,7 @@ primary_region = "dfw"
 
 [env]
   FLASK_ENV = "production"
+  ENABLE_PREDICTIONS = "true"
   PORT = "8080"
   OMP_NUM_THREADS = "1"
   MKL_NUM_THREADS = "1"

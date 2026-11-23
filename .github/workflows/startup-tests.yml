@@ -19,6 +19,8 @@ jobs:
         with:
           python-version: "3.11"
 
+      - run: python deployment/unpack_model.py "$RUNNER_TEMP/biokg-serving"
+
       - run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - run: python -m pip install -r requirements.txt

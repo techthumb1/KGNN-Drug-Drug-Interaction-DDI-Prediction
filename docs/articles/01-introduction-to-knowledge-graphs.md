@@ -64,6 +64,8 @@ Keeping the source and relationship type attached to a record helps us inspect w
 
 Together, they score candidate relationships for drugs represented in the graph, giving us patterns to investigate. The score is uncalibrated, so it is not a probability of an adverse reaction or evidence that a medication combination is safe.
 
+I compared the published TRIX and ULTRA checkpoints on BioKG and kept the evaluated 1,000-step R-GCN for this release. The model report records the matched comparisons, the full held-out results and the timing measurements. [BioKG model evaluation](../biokg-model-evaluation.md)
+
 I also retained a [GraphSAGE](https://snap.stanford.edu/graphsage/) implementation as exploratory code, but it is not a trained model serving predictions in the app. GraphSAGE can support learning for unseen nodes when it has appropriate features and graph inputs. Adding that capability here would require a defined drug-feature pipeline, training and evaluation on drugs excluded from training, rather than simply enabling the existing class.
 
 For graph attribution, I added a trained [PGExplainer](https://proceedings.neurips.cc/paper_files/paper/2020/file/e37b08dd3015330dcbb5d6663667b8b8-Paper.pdf) adaptation for link prediction. It ranks recorded edges entering the two selected drugs, while the rest of the graph context stays fixed. The application also measures how the prediction changes when each displayed edge's messages are gated. This helps inspect the model's dependence on those messages, without establishing a biological mechanism.
@@ -76,6 +78,8 @@ The D3.js graph explorer displays recorded relationships around selected drugs, 
 
 The application accepts a list of 2 to 10 medications and checks every unique pair. It presents recorded DrugBank entries separately from optional model scores for supported drugs. Generic and brand-name searches use the supplied DrugBank records and a cached NLM RxTerms vocabulary; recognizing a name does not guarantee either interaction-record coverage or model coverage.
 
+For each supported drug pair, **Rank model relations** scores all 38 drug–drug relation types in BioKG. Select an individual result to see how the model calculated that score.
+
 For supported predictions, the explanation page offers two views. The decoder breakdown shows how learned dimensions combine to produce the DistMult score, while the PGExplainer view ranks incoming graph messages and reports their measured effects. The recorded network, decoder arithmetic and graph attribution answer different questions, even when they appear together in the interface.
 
 [Try the public BioKG Research Demo](https://kgnn-drug-drug-interaction-ddi-prediction-falling-sunset-9369.fly.dev/) or [explore the repository](https://github.com/techthumb1/KGNN-Drug-Drug-Interaction-DDI-Prediction). The application is a research demonstration, not a clinical decision tool.
@@ -85,3 +89,5 @@ For supported predictions, the explanation page offers two views. The decoder br
 Knowledge graphs give researchers a way to organize interconnected biomedical information and examine relationships across databases. Paired with graph-based machine learning, they can help identify candidate connections for further investigation, provided we keep track of what the data and model can actually support.
 
 In Article 2, **Building a Biomedical Knowledge Graph for Drug Discovery**, I'll walk through loading the data and reconciling identifiers so the graph, model and application agree about which entity each record represents.
+
+[Add the published Part 2 link here]

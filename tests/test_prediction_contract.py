@@ -69,6 +69,20 @@ class ContractTests(unittest.TestCase):
             self.config,
         ) = fixture()
 
+    def test_sparse_rgcn_matches_full_graph_forward_and_gradients(self):
+        from src.train.sparse_rgcn import SparseRGCN
+
+        normal = self.model
+        sparse = SparseRGCN(copy.deepcopy(normal), self.graph, self.contract)
+        edges, relations = flatten_graph(self.graph, self.contract, "cpu")
+        expected = normal(self.graph.x_dict, edges, relations)
+        actual = sparse(self.graph.x_dict, None, None)
+        torch.testing.assert_close(actual, expected, atol=1e-6, rtol=1e-5)
+        expected.square().sum().backward()
+        actual.square().sum().backward()
+        for ordinary, cached in zip(normal.parameters(), sparse.parameters()):
+            torch.testing.assert_close(cached.grad, ordinary.grad, atol=1e-5, rtol=1e-5)
+
     def test_edges_and_queries_use_the_same_type_offsets(self):
         edges, _ = flatten_graph(self.graph, self.contract, "cpu")
 
@@ -471,6 +485,25 @@ class RouteTests(unittest.TestCase):
             edge_types,
         ).detach()
         self.runtime.prediction_error = None
+
+    def test_relation_ranking_matches_scoring_for_all_drug_relations(self):
+        url = "/relation_rank?drug1_id=0&drug2_id=1&format=json"
+        self.assertEqual(self.client.get(url).status_code, 503)
+        self.enable_fixture_model()
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        ranked = response.json["relations"]
+        self.assertEqual({row["relation_type"] for row in ranked}, {"0", "1"})
+        scores = [row["uncalibrated_model_score"] for row in ranked]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+        for row in ranked:
+            self.assertAlmostEqual(
+                row["uncalibrated_model_score"],
+                self.runtime.predict_score(0, row["relation_type"], 1),
+                places=6,
+            )
+        self.assertEqual(self.client.get(url.replace("drug2_id=1", "drug2_id=0")).status_code, 400)
+        self.assertIn(b"BioKG relation ranking", self.client.get(url.replace("&format=json", "")).data)
 
     def test_home_graph_and_health_work_without_predictions(self):
         home = self.client.get("/")
