@@ -119,9 +119,9 @@ class NeighborhoodTests(unittest.TestCase):
                 )
 
     def test_no_fabricated_pgexplainer(self):
-        from src.explain.explain_pg import run_pgexplainer
+        from src.explain.explain_pg import run_pgexplainer, ExplanationUnavailable
 
-        with self.assertRaises(NotImplementedError):
+        with self.assertRaises(ExplanationUnavailable):
             run_pgexplainer(None, None, 0, 1)
 
     def test_no_edges_returns_selected_nodes(self):

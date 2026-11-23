@@ -289,6 +289,7 @@ class BootTests(unittest.TestCase):
                 "graph": "ready",
                 "predictions": "unavailable",
                 "explanations": "unavailable",
+                "graph_explanations": "unavailable",
             },
         )
 

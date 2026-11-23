@@ -22,6 +22,19 @@
 <div class="table-wrap"><table><thead><tr><th>Learned dimension</th><th>Signed logit contribution</th><th>Relative magnitude</th><th>Score without term</th><th>Score change</th></tr></thead><tbody id="terms"></tbody></table></div>
 <details><summary id="all-toggle">Show all dimensions</summary><div class="table-wrap"><table><thead><tr><th>Dimension</th><th>Logit term</th><th>Score without term</th></tr></thead><tbody id="all-terms"></tbody></table></div></details>
 <p id="limits" class="muted"></p><button id="download" type="button">Download explanation JSON</button></section>
+<section id="graph-explanation" class="card" hidden>
+<h2>Which graph connections influence this score?</h2>
+<p>PGExplainer ranks connections entering the two selected drugs. Other graph context stays fixed. Each displayed edge also has a measured effect from gating its messages and recalculating both R-GCN layers.</p>
+<button id="explain-graph" type="button">Explain graph connections</button>
+<p id="graph-status" role="status" aria-live="polite"></p>
+<div id="graph-attribution" hidden>
+<p id="graph-scope" class="muted"></p>
+<div class="metrics"><div><strong>Original score</strong><p id="graph-original"></p></div><div><strong>Only displayed candidate edges active</strong><p id="graph-kept"></p></div><div><strong>Displayed edge messages gated</strong><p id="graph-gated"></p></div></div>
+<p>Root transformations and all graph messages outside the candidate scope remain active in both comparisons. A positive logit change means gating that edge lowers the model output; a negative change means it raises the output. Edge effects can overlap and do not add up to the score.</p>
+<div class="table-wrap"><table><thead><tr><th>Source</th><th>Recorded relation</th><th>Target</th><th>PGExplainer mask weight</th><th>Logit change when gated</th></tr></thead><tbody id="graph-edges"></tbody></table></div>
+<details><summary>Held-out evaluation and limits</summary><p id="graph-evaluation"></p><p id="graph-limits"></p></details>
+<button id="download-graph" type="button">Download graph attribution JSON</button>
+</div></section>
 <p class="muted">Recorded source relationships can provide context. They do not, by themselves, identify what caused a prediction or establish drug safety.</p>
 </main><script>
 const params=new URLSearchParams(location.search), form=document.getElementById('explain-form'), status=document.getElementById('status');
@@ -31,7 +44,7 @@ if(params.has('relation_type')) relation.value=params.get('relation_type');
 let explanation;
 function cell(row,value){const td=document.createElement('td');td.textContent=value;row.append(td);return td}
 async function load(event){
- if(event)event.preventDefault();document.getElementById('calculate').disabled=true;status.textContent='Calculating exact model contributions…';status.className='';document.getElementById('result').hidden=true;
+ if(event)event.preventDefault();document.getElementById('calculate').disabled=true;status.textContent='Calculating exact model contributions…';status.className='';document.getElementById('result').hidden=true;document.getElementById('graph-explanation').hidden=true;document.getElementById('graph-attribution').hidden=true;document.getElementById('graph-status').textContent='';
  try{
   const query=new URLSearchParams({drug1_id:first.value,drug2_id:second.value,relation_type:relation.value});
   const response=await fetch('/explain?'+query),data=await response.json();if(!response.ok)throw new Error(data.error||'Explanation unavailable.');explanation=data;
@@ -47,9 +60,9 @@ async function load(event){
   }
   document.getElementById('all-toggle').textContent='Show all '+data.contributions.length+' dimensions';
   document.getElementById('graph-link').href='/graph?'+new URLSearchParams({drug1_id:first.value,drug2_id:second.value,relation_type:relation.value});
-  document.getElementById('result').hidden=false;status.textContent='Showing the 12 largest absolute contributions; all dimensions are available below.';
+  document.getElementById('result').hidden=false;document.getElementById('graph-explanation').hidden=false;status.textContent='Showing the 12 largest absolute contributions; all dimensions are available below.';
  }catch(error){status.textContent=error.message;status.className='error'}finally{document.getElementById('calculate').disabled=false}
 }
 form.addEventListener('submit',load);document.getElementById('download').addEventListener('click',()=>{if(!explanation)return;const url=URL.createObjectURL(new Blob([JSON.stringify(explanation,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='biokg-model-explanation.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)});
 if(first.value&&second.value&&relation.value)load();
-</script></body></html>
+</script><script src="{{ url_for('static', filename='graph-explanation.js') }}"></script></body></html>

@@ -43,6 +43,8 @@ except Exception as error:
 
 @app.get("/healthz")
 def healthz():
+    from src.explain.explain_pg import artifact_status
+
     return {
         "status": "ok",
         "graph": "ready",
@@ -52,6 +54,10 @@ def healthz():
             else "unavailable"
         ),
         "explanations": "decoder_decomposition" if runtime.prediction_error is None else "unavailable",
+        "graph_explanations": (
+            artifact_status(runtime.model, runtime.contract["train_graph_sha256"])
+            if runtime.prediction_error is None else "unavailable"
+        ),
     }, 200
 
 

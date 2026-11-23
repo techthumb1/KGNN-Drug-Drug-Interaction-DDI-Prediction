@@ -22,7 +22,40 @@ This is not a clinical decision tool. Source relationships and model scores do n
 
 Predictions default to **unavailable**. The graph explorer can run without a model checkpoint, but still requires the official BioKG dataset.
 
-`/explain_view` now provides an exact DistMult decoder score decomposition for a supported pair/relation. `/explain` returns the full numerical explanation as JSON: every learned dimension's signed logit term, the score with that term removed, and positive/negative totals. This holds cached graph embeddings fixed; it does not attribute graph edges or assign biological meaning to dimensions. The DistMult decoder is symmetric for a fixed relation. Random weights, hard-coded SHAP values and untrained GraphSAGE inference remain disabled; `/explain_graph` still returns 503 because validated graph-edge attribution is not implemented.
+`/explain_view` now provides an exact DistMult decoder score decomposition for a supported pair/relation. `/explain` returns the full numerical explanation as JSON: every learned dimension's signed logit term, the score with that term removed, and positive/negative totals. This holds cached graph embeddings fixed; it does not attribute graph edges or assign biological meaning to dimensions. The DistMult decoder is symmetric for a fixed relation. A trained PGExplainer adaptation now provides graph-message attribution at `/explain_graph`, with a separate section on `/explain_view`. Random weights, hard-coded SHAP values and untrained GraphSAGE inference remain disabled.
+
+## Graph attribution and GraphSAGE
+
+PGExplainer is an explanation model, separate from the R-GCN encoder and DistMult decoder. This implementation adapts the paper's shared edge-mask network and Concrete sampling to a relation-conditioned link score. It is not an untrained PyG explainer instantiated at request time. The 105 KB trained artifact and its evaluation report are included under `src/explain/artifacts/`; no additional download URL, secret or Python dependency is required.
+
+The candidate scope is **every recorded training edge entering either queried drug**. A shared MLP receives source, target, edge-relation and query embeddings. Other graph context stays fixed. Learned gates multiply edge messages in both R-GCN layers, retaining original relation-wise mean denominators and self/root transformations. This is message gating, not physical edge deletion with degree renormalization. Unmasked calculations must reproduce the deployed predictor before any explanation is returned. This uses the model's full training context, not the graph explorer's truncated 100-edge display.
+
+The page ranks 20 edges and recomputes the model with each edge's messages gated separately. Signed logit changes show whether gating lowers or raises the model output; they are not additive contributions. It also reports scores with only those candidate edges active and with those edges gated, so an incomplete explanation cannot silently appear sufficient. Available entity names and recorded relation names accompany the typed identifiers. JSON export includes the full held-out evaluation.
+
+The explainer was trained for 50 epochs on 128 query examples, with 6,400 optimizer updates, while the evaluated predictor remained frozen. Thirty-two disjoint explanation queries came from official validation drug–drug triples and random candidate tails. Only official training edges were used for message passing; sampled candidates are not verified negative interactions. This is a small model-fidelity evaluation, not biological validation or a new predictor benchmark.
+
+| Held-out explanation measure | Result |
+| --- | ---: |
+| Mean logit error, retaining top 20% of candidate edges | 1.9923 |
+| Mean logit error, retaining equal-budget random edges | 5.1986 |
+| Mean absolute logit change, gating top 20% | 5.2377 |
+| Mean absolute logit change, gating random 20% | 1.9919 |
+| Mean absolute score error using the learned soft mask | 0.02837 |
+| Maximum unmasked logit reconstruction error | 0.000002384 |
+
+The artifact is bound to the exact predictor parameters and training-graph hash. Missing, stale, degenerate or unevaluated artifacts return an explicit unavailable response. Computational neighborhoods above 50,000 candidate edges are rejected rather than truncated. First use initializes a CPU explanation cache; concurrent explanation work is bounded to one request. `/healthz` reports `graph_explanations` separately from the decoder explanation.
+
+To reproduce the explainer after preparing the evaluated R-GCN checkpoint:
+
+```bash
+ENABLE_PREDICTIONS=true python -m src.train.train_pgexplainer --epochs 50 --train-queries 128 --eval-queries 32
+```
+
+This command trains the explainer, not the predictor. It needs the official validation split locally for the explanation evaluation. The production image only needs the included artifact and training graph. Retrain and re-evaluate the explainer whenever predictor weights change.
+
+**GraphSAGE is an alternative encoder, not a required additional stage.** Its existing class is retained in `src/models/graphsage_model.py`; its old untrained serving path stays disabled. The deployed predictor remains R-GCN/DistMult. Adding GraphSAGE would require a trained baseline and a defined feature/input pipeline. Claiming prediction for previously unseen drugs would additionally require usable features for those drugs and evaluation with drug identities held out; the current BioKG edge split does not establish that capability.
+
+References: [PGExplainer paper](https://proceedings.neurips.cc/paper_files/paper/2020/file/e37b08dd3015330dcbb5d6663667b8b8-Paper.pdf), [GraphSAGE](https://snap.stanford.edu/graphsage/).
 
 ## Data and identifiers
 
@@ -144,7 +177,7 @@ The 100-step demonstration candidate produced these official ranking results:
 | Validation | 162,886 | 0.148652 |
 | Test | 162,870 | 0.147863 |
 
-Test evaluation used the same selected weights without retraining. The exact-triple audit found zero training overlaps in both held-out splits. These are results for a single 100-step demonstration recipe, not a convergence claim or a tuned benchmark. Scores remain uncalibrated. The app now exposes an exact decoder decomposition; validated biological or graph-edge attributions remain unimplemented.
+Test evaluation used the same selected weights without retraining. The exact-triple audit found zero training overlaps in both held-out splits. These are results for a single 100-step demonstration recipe, not a convergence claim or a tuned benchmark. Scores remain uncalibrated. The app exposes an exact decoder decomposition plus a separately trained PGExplainer adaptation for incoming edge-message attribution. Neither establishes a biological mechanism.
 
 ## Setup
 
@@ -259,8 +292,8 @@ After deployment, verify the homepage, graph generation and health response. Wit
 | `GET /healthz` | Graph readiness and separate prediction/explanation availability |
 | `GET /download_log` | V2 prediction history, or 404 if no V2 log exists |
 | `GET /explain` | Exact decoder contributions and dimension-removal scores as JSON; requires a ready model |
-| `GET /explain_view` | Interactive decoder explanation page |
-| `GET /explain_graph` | 503; graph-edge attribution unavailable |
+| `GET /explain_view` | Decoder explanation and trained PGExplainer attribution |
+| `GET /explain_graph` | Trained PGExplainer edge ranks, measured message ablations and held-out evaluation; 503 for missing/incompatible artifacts |
 
 ## Tests
 
@@ -293,7 +326,7 @@ After deployment, capture new screenshots of:
 - The recorded relationship view using actual BioKG data.
 - The batch page, showing either its unavailable notice or actual results.
 
-Articles 2–6 now describe the current training graph, measured R-GCN demonstration, exact decoder explanation, medication list and named graph explorer. The compact GraphSAGE class remains teaching code, not a second deployed model. Validated graph-edge explainers and genomic/temporal extensions remain future work. The article package is a separate writing deliverable; Article 1 is unchanged.
+Articles 2–6 now describe the current training graph, measured R-GCN demonstration, exact decoder explanation, medication list and named graph explorer. The compact GraphSAGE class remains teaching code, not a second deployed model. The current PGExplainer adaptation is trained and evaluated for a bounded graph-message attribution scope; genomic/temporal extensions remain future work. An aligned [Article 1 draft](docs/articles/01-introduction-to-knowledge-graphs.md) distinguishes the deployed predictor, retained GraphSAGE code and the new PGExplainer attribution. Earlier article exports predate this addition.
 
 ## Sources
 

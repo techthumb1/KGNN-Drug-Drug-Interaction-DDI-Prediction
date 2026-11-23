@@ -30,4 +30,4 @@ def explain_score(runtime, first, relation, second):
 
 
 def run_explainer(*args, **kwargs):
-    raise NotImplementedError("Use explain_score for the exact decoder decomposition; legacy graph attribution is unavailable.")
+    raise NotImplementedError("Use explain_score for decoder arithmetic or run_pgexplainer for trained graph-message attribution.")
