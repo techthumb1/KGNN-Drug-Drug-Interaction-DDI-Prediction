@@ -43,6 +43,18 @@ A second run scored 64 drug–drug validation triples using the same negative ca
 
 The upstream kernels and graph conversion matched the official forward pass on a small graph to within 0.000002 for both TRIX checkpoints and ULTRA. The small improvements after tuning need further evaluation. Full foundation-model splits and drug identity holdouts remain future experiments. [TRIX reports](https://github.com/techthumb1/KGNN-Drug-Drug-Interaction-DDI-Prediction/actions/runs/45145263213/artifacts/14805335090) · [ULTRA reports](https://github.com/techthumb1/KGNN-Drug-Drug-Interaction-DDI-Prediction/actions/runs/45145263213/artifacts/14805165456)
 
+### 256-query drug–drug entity comparison
+
+All three evaluation runs scored the same 256 validation rows and their official typed candidates. The R-GCN scores come from the exact weights in the serving bundle.
+
+| Model | MRR | Median CPU seconds per query | Batch size | Report |
+| --- | ---: | ---: | ---: | --- |
+| R-GCN 1,000 steps | 0.536830 | 0.000145 | 64 | [JSON](biokg-results/rgcn-ddi256-valid.json) |
+| TRIX zero-shot | 0.314317 | 1.413887 | 4 | [JSON](biokg-results/trix-ddi256-valid.json) |
+| ULTRA 3g zero-shot | 0.076514 | 1.578664 | 4 | [JSON](biokg-results/ultra-ddi256-valid.json) |
+
+Timing excludes graph setup and R-GCN embedding precomputation. These batch timings describe throughput on the evaluation machine. The sample supports the serving choice for this demo, and full foundation-model split results remain pending.
+
 ## Evaluation protocol
 
 - **Entity prediction.** Score the [official typed head and tail negatives](https://ogb.stanford.edu/docs/linkprop/#ogbl-biokg), averaging optimistic and pessimistic ranks for ties. The comparison uses the same row IDs and negatives for each model and reports a drug–drug breakdown by relation.
@@ -61,7 +73,12 @@ The upstream kernels and graph conversion matched the official forward pass on a
 
 The comparison uses the same pair scorer, sample seeds and typed candidates. Graph inputs count non-DDI training neighbors by relation. Text inputs are fixed class, modality and form indicators extracted from descriptions, with interaction-language sentences excluded. Of 10,533 BioKG drugs, 1,243 had matched descriptions and 438 had at least one retained term. The cold-start experiment holds drug identities out of pair-classifier training while providing their non-DDI graph context and available descriptions at inference.
 
-The combined input was modestly ahead in this single-seed experiment. The experiment uses a limited description projection and has uneven coverage. The official MERRY release requires CUDA 12.x and platform-specific dependencies, and its evaluation requires a checkpoint directory. These measurements come from the repository's simpler classifier. [MERRY implementation](https://github.com/zjukg/MERRY)
+The combined input was modestly ahead in this single-seed experiment. The experiment uses a limited description projection and has uneven coverage. Official MERRY scoring remains pending. The inspected upstream revision requires CUDA 12.x, platform-specific dependencies, and both checkpoint and step directories for evaluation. These measurements come from the repository's simpler classifier. [MERRY implementation at the inspected revision](https://github.com/zjukg/MERRY/tree/96e7f87815888025d81c3e536559abb5ae276202)
+
+## Further experiments
+
+- Measure TRIX and ULTRA on full held-out splits and on a separate drug-identity holdout with explicit rules for available graph context. Run MERRY under the same candidate and description restrictions once compatible weights and runtime are available.
+- Use [UltraQuery](https://arxiv.org/abs/2404.07198) for a subsequent benchmark of multi-relation questions with logical conditions. Use [GFM-RAG](https://arxiv.org/abs/2502.01113) for a separate document-retrieval and evidence-grounding evaluation.
 
 ## Reproduce
 
@@ -98,12 +115,14 @@ OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 python -m src.train.finetune_foundation \
 
 OMP_NUM_THREADS=3 MKL_NUM_THREADS=3 python -m src.train.evaluate_foundation \
   --model trix-entity --upstream ../trix-upstream --checkpoint models/trix_entity_decoder_tuned.pt \
-  --max-queries 64 --batch-size 2 --output artifacts/trix-decoder-validation.json
+  --ddi-only --max-queries 64 --batch-size 2 --output artifacts/trix-decoder-validation.json
 
 OMP_NUM_THREADS=2 MKL_NUM_THREADS=2 python -m src.train.ablate_biomedical_text \
   --descriptions /path/to/drugbank_slim.json --output artifacts/text-ablation.json
 ```
 
 Pass `--model rgcn --checkpoint models/rgcn_v2.pt` for the reference comparison. The distributed demo checkpoint is documented in the main README. Use `--ddi-only` to sample exclusively from drug–drug triples. Omit `--max-queries` for complete official evaluation on the eligible queries. Run foundation evaluations sequentially on memory-constrained hosts.
+
+The 256-query entity comparison used `--ddi-only --max-queries 256 --seed 42` with batch size 4 for TRIX and ULTRA and 64 for R-GCN. For the complete R-GCN relation reports, use `--model rgcn --checkpoint models/rgcn_v2.pt --task relation --batch-size 512` and run each of `--split valid` and `--split test`.
 
 For test evaluation of frozen R-GCN weights, use `src.train.evaluate_checkpoint` with the validation-based selection decision. Any subsequent explainer training needs to use the exact new serving artifact and pass held-out fidelity checks before deployment.

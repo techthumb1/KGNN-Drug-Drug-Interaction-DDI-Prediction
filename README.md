@@ -178,10 +178,10 @@ Verification performed during the refresh included:
 
 The reproduced 1,000-step serving candidate produced these official ranking results:
 
-| Split | Evaluated triples | Overall MRR | Drug–drug MRR |
-| --- | ---: | ---: | ---: |
-| Validation | 162,886 | 0.378657 | 0.523883 |
-| Test | 162,870 | 0.377500 | 0.521393 |
+| Split | Evaluated triples | Entity MRR | Drug–drug entity MRR | Drug–drug relation MRR |
+| --- | ---: | ---: | ---: | ---: |
+| Validation | 162,886 | 0.378657 | 0.523883 | 0.401589 |
+| Test | 162,870 | 0.377500 | 0.521393 | 0.426052 |
 
 Test evaluation used the frozen weights chosen on validation. The exact-triple audit found zero training overlaps in both held-out splits. An independently evaluated PGExplainer is bound to these weights. See the [evaluation and reproduction report](docs/biokg-model-evaluation.md) for the 100-step reference and matched foundation-model comparisons.
 
@@ -338,7 +338,7 @@ After deployment, capture new screenshots of:
 - The recorded relationship view using actual BioKG data.
 - The batch page, showing either its unavailable notice or actual results.
 
-Articles 2–6 now describe the current training graph, measured R-GCN demonstration, exact decoder explanation, medication list and named graph explorer. The compact GraphSAGE class remains teaching code, not a second deployed model. The current PGExplainer adaptation is trained and evaluated for a bounded graph-message attribution scope; genomic/temporal extensions remain future work. An aligned [Article 1 draft](docs/articles/01-introduction-to-knowledge-graphs.md) distinguishes the deployed predictor, retained GraphSAGE code and the new PGExplainer attribution. Earlier article exports predate this addition.
+The six-part tutorial follows the training graph, model comparisons, decoder and graph explanations, application deployment, and a follow-up study design for genomic and temporal data. Start with [Article 1](docs/articles/01-introduction-to-knowledge-graphs.md), then use the notebooks above to reproduce the data and model workflows.
 
 ## Sources
 
