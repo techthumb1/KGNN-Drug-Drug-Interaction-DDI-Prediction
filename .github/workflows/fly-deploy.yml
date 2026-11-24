@@ -40,6 +40,8 @@ jobs:
           demo_url=https://kgnn-drug-drug-interaction-ddi-prediction-falling-sunset-9369.fly.dev
           curl --fail --show-error --retry 12 --retry-all-errors --retry-delay 10 --max-time 30 "$demo_url/healthz" |
             python -c 'import json, sys; data = json.load(sys.stdin); print(data); assert data["predictions"] == "ready" and data["graph_explanations"] == "pgexplainer" and data["model_optimizer_steps"] == 1000'
+          curl --fail --silent --show-error --max-time 20 "$demo_url/" |
+            python -c 'import sys; assert "<title>BioKG Research Demo</title>" in sys.stdin.read()'
       - name: Capture runtime diagnostics
         if: always()
         run: |
